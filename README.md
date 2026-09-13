@@ -19,7 +19,7 @@ e o mesmo deck pode ser exportado com qualquer um dos 26 modelos incluídos.
 | Conteúdo | Texto livre ou sintaxe avançada (`#`, `##`, `-`, `>`, `! número \| legenda`) |
 | Estrutura | `interpretarConteudo()` reconhece título, seções, listas, citações e números |
 | Design | Galeria mostra a sua apresentação em cada modelo |
-| Revisão | Editar, duplicar, reordenar, trocar tipo, apresentar em tela cheia |
+| Revisão | Editar, duplicar, reordenar, trocar tipo, formatar cada campo, plano de fundo, marca d'água, apresentar em tela cheia |
 | Exportação | `.pptx` com formas e textos editáveis, `.pdf` 16:9 com uma página por slide |
 
 ### IA, opcional
@@ -111,6 +111,17 @@ src/
   hooks/useAutosave.js   gravação com atraso
 test/                    testes do núcleo e de ponta a ponta
 ```
+
+## Formatação, fundo e marca d'água
+
+Cada campo do editor tem uma barra própria: aumentar e diminuir a fonte, negrito,
+itálico, alinhamento e cor, com um botão para voltar ao padrão do modelo. Os ajustes
+ficam no slide (`slide.estilo`), não no modelo, então sobrevivem à troca de design.
+
+O plano de fundo (cor, gradiente ou imagem, com controle de escurecimento) e a marca
+d'água (texto ou logo, em cinco posições, com tamanho e opacidade) valem para a
+apresentação inteira e ficam no deck. Cada slide pode esconder a marca individualmente.
+Tudo isso vai junto no PPTX — a imagem é embutida no arquivo — e no PDF.
 
 ## Modelos
 

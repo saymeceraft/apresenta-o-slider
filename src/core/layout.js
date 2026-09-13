@@ -1,6 +1,7 @@
 import { F, CW, isSerif } from "./fontes.js";
 import { sobre } from "./cores.js";
 import { ROTULO } from "./deck.js";
+import { fundoShapes, marcaShapes } from "./composicao.js";
 
 /* Sistema de coordenadas lógico do slide: 960 x 540 (16:9).
    Toda exportação converte a partir daqui, então mudar de resolução
@@ -8,16 +9,32 @@ import { ROTULO } from "./deck.js";
 export const W = 960, H = 540, P = 72, PT = 64;
 
 const pesoFator = (w) => (w >= 800 ? 1.09 : w >= 700 ? 1.06 : w >= 600 ? 1.03 : w <= 300 ? 0.96 : 1);
+/* A margem de 6% cobre a diferença quando a fonte real não está disponível
+   e o sistema substitui por outra um pouco mais larga. */
 const larguraTexto = (txt, size, fonte, upper, track, peso) =>
-  txt.length * size * (CW(fonte) * pesoFator(peso || 400) + (track || 0)) * (upper ? 1.14 : 1);
+  txt.length * size * (CW(fonte) * pesoFator(peso || 400) + (track || 0)) * (upper ? 1.14 : 1) * 1.06;
 
-// Quebra por palavra desperdiça espaço no fim de cada linha; a margem de 7% cobre isso.
+/** Conta as linhas quebrando por palavra, como o navegador faz. */
+function contarLinhas(linha, w, size, fonte, upper, track, peso) {
+  const palavras = String(linha).split(/\s+/).filter(Boolean);
+  if (!palavras.length) return 1;
+  const larg = (txt) => larguraTexto(txt, size, fonte, upper, track, peso);
+  let linhas = 1, atual = "";
+  for (const palavra of palavras) {
+    const teste = atual ? `${atual} ${palavra}` : palavra;
+    if (larg(teste) <= w * 1.01) { atual = teste; continue; }
+    if (atual) linhas++;
+    atual = palavra;
+    const excedente = Math.ceil(larg(palavra) / w) - 1;   // palavra maior que a linha
+    if (excedente > 0) { linhas += excedente; atual = ""; }
+  }
+  return linhas;
+}
+
 export function alturaTexto(txt, w, size, lh, fonte, upper, track, peso) {
-  const linhas = String(txt || "").split("\n");
   let total = 0;
-  for (const l of linhas) {
-    const larg = larguraTexto(l, size, fonte, upper, track, peso) * 1.07;
-    total += Math.max(1, Math.ceil(larg / w)) * size * lh;
+  for (const linha of String(txt || "").split("\n")) {
+    total += contarLinhas(linha, w, size, fonte, upper, track, peso) * size * lh;
   }
   return Math.round(total);
 }
@@ -30,6 +47,41 @@ export const pxW = (w, k = 1) => w * k;
 export const pxH = (h, k = 1) => h * k;
 
 const S = (o) => o;
+
+const CLAMP = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/** Ajustes que o usuário fez em um campo específico deste slide. */
+export function estiloCampo(slide, campo) {
+  const o = (slide && slide.estilo && slide.estilo[campo]) || {};
+  return {
+    escala: CLAMP(Number(o.escala) || 1, 0.6, 2),
+    cor: typeof o.cor === "string" && /^#[0-9a-f]{6}$/i.test(o.cor) ? o.cor : null,
+    negrito: typeof o.negrito === "boolean" ? o.negrito : null,
+    italico: typeof o.italico === "boolean" ? o.italico : null,
+    align: ["l", "ctr", "r"].includes(o.align) ? o.align : null,
+  };
+}
+
+/** Aplica cor, peso, itálico e alinhamento por cima das propriedades do modelo. */
+const so = (e) => {
+  const o = {};
+  if (e.cor) o.color = e.cor;
+  if (e.negrito !== null) o.weight = e.negrito ? 700 : 400;
+  if (e.italico !== null) o.italic = e.italico;
+  if (e.align) o.align = e.align;
+  return o;
+};
+
+/** Peso que o texto realmente vai ter, para medir a altura corretamente. */
+const pesoDe = (base, e) => (e.negrito === null ? base : (e.negrito ? 700 : 400));
+
+const comEstilo = (props, e) => ({
+  ...props,
+  color: e.cor || props.color,
+  weight: e.negrito === null ? props.weight : (e.negrito ? Math.max(props.weight || 400, 700) : Math.min(props.weight || 400, 400)),
+  italic: e.italico === null ? props.italic : e.italico,
+  align: e.align || props.align,
+});
 
 function decoShapes(t, tipo) {
   const capa = tipo === "capa", out = [];
@@ -96,33 +148,37 @@ function rotulo(t, texto, cor) {
 
 function layoutCapa(t, s) {
   const out = [];
+  const eT = estiloCampo(s, "titulo");
+  const eS = estiloCampo(s, "subtitulo");
+  const SUB = (n) => Math.round(n * eS.escala);
   const titulo = s.titulo || "Título da apresentação";
   const sub = s.subtitulo || "";
   const estreita = t.deco === "mosaico";
   const wTxt = (estreita ? 460 : W - 2 * P);
   const base = titulo.length > 60 ? 46 : titulo.length > 34 ? 58 : 72;
-  let size = Math.round(base * (t.escala || 1) * (t.upper ? 0.92 : 1) * (estreita ? 0.82 : 1));
-  const tp = () => tituloProps(t, size);
-  const hT = () => alturaTexto(titulo, wTxt, size, tp().lh, t.fTitle, t.upper, t.track, t.wTitle);
+  let size = Math.round(base * (t.escala || 1) * (t.upper ? 0.92 : 1) * (estreita ? 0.82 : 1) * eT.escala);
+  const tp = () => comEstilo(tituloProps(t, size), eT);
+  const pT = pesoDe(t.wTitle, eT);
+  const hT = () => alturaTexto(titulo, wTxt, size, tp().lh, t.fTitle, t.upper, t.track, pT);
   while (size > 26 && hT() > 250) size -= 4;
-  const hSub = sub ? alturaTexto(sub, Math.min(wTxt, 700), 24, 1.4, t.fBody, false, 0) : 0;
+  const hSub = sub ? alturaTexto(sub, Math.min(wTxt, 700), SUB(24), 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
 
   switch (t.capa) {
     case "centro": {
       const total = hT() + (sub ? 30 + hSub : 0);
       let y = Math.round((H - total) / 2);
       out.push(txt({ x: P, y, w: W - 2 * P, text: titulo, align: "ctr", ...tp() }));
-      if (sub) out.push(txt({ x: 160, y: y + hT() + 30, w: W - 320, text: sub, align: "ctr", font: t.fBody, size: 24, weight: t.wBody, color: t.muted, lh: 1.4 }));
+      if (sub) out.push(txt({ x: 160, y: y + hT() + 30, w: W - 320, text: sub, align: "ctr", font: t.fBody, size: SUB(24), weight: t.wBody, color: t.muted, lh: 1.4, ...so(eS) }));
       return out;
     }
     case "editorial": {
       const s2 = isSerif(t.fTitle);
       out.push(txt({ x: P, y: PT, w: 300, text: "Edição nº 01", font: t.fBody, size: 15, color: t.muted }));
       out.push(txt({ x: W - P - 300, y: PT, w: 300, text: "Apresentação", font: t.fBody, size: 15, color: t.muted, align: "r" }));
-      const hs = sub ? alturaTexto(sub, wTxt, 26, 1.4, s2 ? t.fTitle : t.fBody, false, 0) : 0;
+      const hs = sub ? alturaTexto(sub, wTxt, SUB(26), 1.4, s2 ? t.fTitle : t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
       const y0 = H - PT - hs - (sub ? 28 : 0) - hT();
       out.push(txt({ x: P, y: y0, w: wTxt, text: titulo, ...tp() }));
-      if (sub) out.push(txt({ x: P, y: y0 + hT() + 28, w: wTxt, text: sub, font: s2 ? t.fTitle : t.fBody, italic: s2, size: 26, color: t.accent, lh: 1.4 }));
+      if (sub) out.push(txt({ x: P, y: y0 + hT() + 28, w: wTxt, text: sub, font: s2 ? t.fTitle : t.fBody, italic: s2, size: SUB(26), color: t.accent, lh: 1.4, ...so(eS) }));
       return out;
     }
     case "painel": {
@@ -133,15 +189,15 @@ function layoutCapa(t, s) {
       out.push(txt({ x: 44, y: H - 88, w: pw - 88, text: "Apresentação", font: t.fBody, size: 16, color: pf, opacity: 0.85 }));
       const cx = pw + 60, cw = W - pw - 120;
       let sz = Math.min(size, 54);
-      const alt = () => alturaTexto(titulo, cw, sz, tituloProps(t, sz).lh, t.fTitle, t.upper, t.track, t.wTitle);
+      const alt = () => alturaTexto(titulo, cw, sz, tituloProps(t, sz).lh, t.fTitle, t.upper, t.track, pT);
       while (sz > 24 && alt() > 200) sz -= 3;
-      const p2 = tituloProps(t, sz);
+      const p2 = comEstilo(tituloProps(t, sz), eT);
       const h2 = alt();
-      const hs = sub ? alturaTexto(sub, cw, 22, 1.45, t.fBody, false, 0) : 0;
+      const hs = sub ? alturaTexto(sub, cw, SUB(22), 1.45, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
       let y = Math.round((H - (4 + 24 + h2 + (sub ? 18 + hs : 0))) / 2);
       out.push(S({ k: "rect", x: cx, y, w: 48, h: 4, fill: t.accent2 || t.accent }));
       out.push(txt({ x: cx, y: y + 28, w: cw, text: titulo, ...p2 }));
-      if (sub) out.push(txt({ x: cx, y: y + 28 + h2 + 18, w: cw, text: sub, font: t.fBody, size: 22, weight: t.wBody, color: t.muted, lh: 1.45 }));
+      if (sub) out.push(txt({ x: cx, y: y + 28 + h2 + 18, w: cw, text: sub, font: t.fBody, size: SUB(22), weight: t.wBody, color: t.muted, lh: 1.45, ...so(eS) }));
       return out;
     }
     case "bloco": {
@@ -150,25 +206,25 @@ function layoutCapa(t, s) {
       out.push(txt({ x: 80, y: 72, w: 400, text: "Apresentação", font: t.fBody, size: 16, weight: 600, color: bf, opacity: 0.8 }));
       const cw = W - 160;
       let sz3 = Math.min(size, 62);
-      const alt3 = () => alturaTexto(titulo, cw, sz3, tituloProps(t, sz3).lh, t.fTitle, t.upper, t.track, t.wTitle);
+      const alt3 = () => alturaTexto(titulo, cw, sz3, tituloProps(t, sz3).lh, t.fTitle, t.upper, t.track, pT);
       while (sz3 > 26 && alt3() > 250) sz3 -= 4;
-      const p2 = { ...tituloProps(t, sz3, bf) };
+      const p2 = comEstilo(tituloProps(t, sz3, bf), eT);
       const h2 = alt3();
-      const hs = sub ? alturaTexto(sub, Math.min(cw, 700), 24, 1.4, t.fBody, false, 0) : 0;
+      const hs = sub ? alturaTexto(sub, Math.min(cw, 700), SUB(24), 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
       const y0 = H - 72 - hs - (sub ? 26 : 0) - h2;
       out.push(txt({ x: 80, y: y0, w: cw, text: titulo, ...p2 }));
-      if (sub) out.push(txt({ x: 80, y: y0 + h2 + 26, w: Math.min(cw, 700), text: sub, font: t.fBody, size: 24, color: bf, opacity: 0.82, lh: 1.4 }));
+      if (sub) out.push(txt({ x: 80, y: y0 + h2 + 26, w: Math.min(cw, 700), text: sub, font: t.fBody, size: SUB(24), color: bf, opacity: 0.82, lh: 1.4, ...so(eS) }));
       return out;
     }
     case "cartaz": {
       const sz = Math.round(size * 1.1);
-      const p2 = tituloProps(t, sz);
-      const h2 = alturaTexto(titulo, wTxt, sz, p2.lh, t.fTitle, t.upper, t.track, t.wTitle);
+      const p2 = comEstilo(tituloProps(t, sz), eT);
+      const h2 = alturaTexto(titulo, wTxt, sz, p2.lh, t.fTitle, t.upper, t.track, pT);
       out.push(...rotulo(t, "Apresentação"));
       out.push(txt({ x: P, y: Math.max(150, Math.round((H - h2) / 2) - 20), w: wTxt, text: titulo, ...p2 }));
       if (sub) {
         out.push(S({ k: "rect", x: P, y: H - PT - hSub + 10, w: 72, h: 6, fill: t.accent }));
-        out.push(txt({ x: P + 96, y: H - PT - hSub, w: 560, text: sub, font: t.fBody, size: 22, color: t.fg, opacity: 0.85, lh: 1.4 }));
+        out.push(txt({ x: P + 96, y: H - PT - hSub, w: 560, text: sub, font: t.fBody, size: SUB(22), color: t.fg, opacity: 0.85, lh: 1.4, ...so(eS) }));
       }
       return out;
     }
@@ -180,24 +236,24 @@ function layoutCapa(t, s) {
       out.push(txt({ x: W - 172, y: 140, w: 112, text: "Novo!", align: "ctr", font: t.fTitle, size: 22, weight: 900, color: t.accent, rot: -12 }));
       const cw = W - 160;
       let sz4 = Math.min(size, 54);
-      const alt4 = () => alturaTexto(titulo, cw, sz4, tituloProps(t, sz4).lh, t.fTitle, t.upper, t.track, t.wTitle);
+      const alt4 = () => alturaTexto(titulo, cw, sz4, tituloProps(t, sz4).lh, t.fTitle, t.upper, t.track, pT);
       while (sz4 > 24 && alt4() > 190) sz4 -= 3;
-      const p2 = tituloProps(t, sz4);
+      const p2 = comEstilo(tituloProps(t, sz4), eT);
       const h2 = alt4();
-      const hs = sub ? alturaTexto(sub, cw, 22, 1.45, t.fBody, false, 0) : 0;
+      const hs = sub ? alturaTexto(sub, cw, SUB(22), 1.45, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
       const y0 = H - 64 - hs - (sub ? 18 : 0) - h2 - 56;
       out.push(S({ k: "rect", x: 56, y: y0, w: W - 112, h: h2 + 56, fill: (t.blocos && t.blocos[0]) || t.surface }));
       out.push(txt({ x: 88, y: y0 + 28, w: cw, text: titulo, ...p2 }));
-      if (sub) out.push(txt({ x: 88, y: y0 + h2 + 56 + 18, w: cw, text: sub, font: t.fBody, size: 22, color: t.fg, lh: 1.45 }));
+      if (sub) out.push(txt({ x: 88, y: y0 + h2 + 56 + 18, w: cw, text: sub, font: t.fBody, size: SUB(22), color: t.fg, lh: 1.45, ...so(eS) }));
       return out;
     }
     default: {
-      const hs = sub ? alturaTexto(sub, Math.min(wTxt, 700), 24, 1.4, t.fBody, false, 0) : 0;
+      const hs = sub ? alturaTexto(sub, Math.min(wTxt, 700), SUB(24), 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
       const y0 = H - PT - hs - (sub ? 28 : 0) - hT();
       out.push(...rotulo(t, "Apresentação"));
       out.push(S({ k: "rect", x: P, y: y0 - 33, w: 56, h: 5, fill: t.accent, radius: Math.min(t.radius, 3) }));
       out.push(txt({ x: P, y: y0, w: wTxt, text: titulo, ...tp() }));
-      if (sub) out.push(txt({ x: P, y: y0 + hT() + 28, w: Math.min(wTxt, 700), text: sub, font: t.fBody, size: 24, weight: t.wBody, color: t.muted, lh: 1.4 }));
+      if (sub) out.push(txt({ x: P, y: y0 + hT() + 28, w: Math.min(wTxt, 700), text: sub, font: t.fBody, size: SUB(24), weight: t.wBody, color: t.muted, lh: 1.4, ...so(eS) }));
       return out;
     }
   }
@@ -209,20 +265,22 @@ function layoutTopicos(t, s) {
   const n = Math.max(itens.length, 1);
   const cols = n <= 3 ? 1 : 2;
   const linhas = Math.ceil(n / cols);
+  const eT = estiloCampo(s, "titulo");
+  const eI = estiloCampo(s, "itens");
   const titulo = s.titulo || "";
-  const sz = Math.round(44 * (t.escala || 1));
-  const tp = tituloProps(t, sz);
-  const hT = titulo ? alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, t.wTitle) : 0;
+  const sz = Math.round(44 * (t.escala || 1) * eT.escala);
+  const tp = comEstilo(tituloProps(t, sz), eT);
+  const hT = titulo ? alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, pesoDe(t.wTitle, eT)) : 0;
   if (titulo) out.push(txt({ x: P, y: PT + 28, w: W - 2 * P, text: titulo, ...tp }));
 
   const topo = PT + 28 + hT + 34;
   const dispo = H - PT - topo;
   const gap = 18;
-  const cardH = Math.max(74, Math.min(126, Math.floor((dispo - gap * (linhas - 1)) / linhas)));
+  const fsz = Math.round((n > 4 ? 19 : 22) * eI.escala);
+  const cardH = Math.max(74, Math.min(126 + Math.round((fsz - 22) * 2.4), Math.floor((dispo - gap * (linhas - 1)) / linhas)));
   const cardW = cols === 1 ? W - 2 * P : Math.floor((W - 2 * P - 20) / 2);
   const y0 = H - PT - (cardH * linhas + gap * (linhas - 1));
   const nb = (t.blocos || []).length;
-  const fsz = n > 4 ? 19 : 22;
 
   itens.forEach((item, i) => {
     const cx = P + (i % cols) * (cardW + 20);
@@ -240,71 +298,82 @@ function layoutTopicos(t, s) {
       out.push(S({ k: "rect", x: cx, y: cy, w: cardW, h: cardH, fill: t.surface, radius: t.radius }));
     }
     out.push(txt({ x: cx + padX, y: cy + padY, w: 60, text: String(i + 1).padStart(2, "0"), font: t.fTitle, size: 17, weight: 700, color: num }));
-    out.push(txt({ x: cx + padX, y: cy + padY + 27, w: cardW - padX * 2, text: item, font: t.fBody, size: fsz, weight: 500, color: cor, lh: 1.3 }));
+    out.push(txt({ x: cx + padX, y: cy + padY + 27, w: cardW - padX * 2, text: item, font: t.fBody, size: fsz, weight: 500, color: cor, lh: 1.3, ...so(eI) }));
   });
   return out;
 }
 
 function layoutTexto(t, s) {
   const out = [...rotulo(t, s.rotulo)];
+  const eT = estiloCampo(s, "titulo");
+  const eC = estiloCampo(s, "corpo");
   const y0 = s.rotulo ? PT + 28 : PT;
   const titulo = s.titulo || "";
-  const sz = Math.round(44 * (t.escala || 1));
-  const tp = tituloProps(t, sz);
-  const hT = titulo ? alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, t.wTitle) : 0;
+  const sz = Math.round(44 * (t.escala || 1) * eT.escala);
+  const tp = comEstilo(tituloProps(t, sz), eT);
+  const hT = titulo ? alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, pesoDe(t.wTitle, eT)) : 0;
   if (titulo) out.push(txt({ x: P, y: y0, w: W - 2 * P, text: titulo, ...tp }));
   const corpo = s.corpo || "";
   if (corpo) {
     const cw = Math.min(W - 2 * P, 760);
-    let cs = corpo.length > 620 ? 19 : corpo.length > 380 ? 22 : 26;
-    while (cs > 15 && alturaTexto(corpo, cw, cs, 1.5, t.fBody, false, 0) > H - (y0 + hT + 30) - PT) cs -= 1;
-    out.push(txt({ x: P, y: y0 + hT + 30, w: cw, text: corpo, font: t.fBody, size: cs, weight: t.wBody, color: t.muted, lh: 1.5 }));
+    let cs = Math.round((corpo.length > 620 ? 19 : corpo.length > 380 ? 22 : 26) * eC.escala);
+    const pC = pesoDe(t.wBody, eC);
+    while (cs > 15 && alturaTexto(corpo, cw, cs, 1.5, t.fBody, false, 0, pC) > H - (y0 + hT + 30) - PT) cs -= 1;
+    out.push(txt({ x: P, y: y0 + hT + 30, w: cw, text: corpo, font: t.fBody, size: cs, weight: t.wBody, color: t.muted, lh: 1.5, ...so(eC) }));
   }
   return out;
 }
 
 function layoutDestaque(t, s) {
   const out = [...rotulo(t, s.rotulo || ROTULO.destaque)];
+  const eN = estiloCampo(s, "numero");
+  const eL = estiloCampo(s, "legenda");
   const num = s.numero || "0";
   const cor = t.destaqueCor || t.accent;
-  const sz = Math.round((num.length > 5 ? 110 : num.length > 3 ? 140 : 180) * Math.max(t.escala || 1, 0.75));
+  const sz = Math.round((num.length > 5 ? 110 : num.length > 3 ? 140 : 180) * Math.max(t.escala || 1, 0.75) * eN.escala);
   const leg = s.legenda || "";
-  const hL = leg ? alturaTexto(leg, 700, 30, 1.3, t.fBody, false, 0) : 0;
+  const lsz = Math.round(30 * eL.escala);
+  const hL = leg ? alturaTexto(leg, 700, lsz, 1.3, t.fBody, false, 0, pesoDe(500, eL)) : 0;
   const total = sz * 1.05 + (leg ? 26 + hL : 0);
   const y = Math.round((H - total) / 2) + 10;
-  out.push(txt({ x: P, y, w: W - 2 * P, text: num, font: t.fTitle, size: sz, weight: t.wTitle, track: -0.03, color: cor, lh: 1.05 }));
-  if (leg) out.push(txt({ x: P, y: y + Math.round(sz * 1.05) + 26, w: 700, text: leg, font: t.fBody, size: 30, weight: 500, color: t.fg, lh: 1.3 }));
+  out.push(txt({ x: P, y, w: W - 2 * P, text: num, font: t.fTitle, size: sz, weight: t.wTitle, track: -0.03, color: cor, lh: 1.05, ...so(eN) }));
+  if (leg) out.push(txt({ x: P, y: y + Math.round(sz * 1.05) + 26, w: 700, text: leg, font: t.fBody, size: lsz, weight: 500, color: t.fg, lh: 1.3, ...so(eL) }));
   return out;
 }
 
 function layoutCitacao(t, s) {
   const out = [...rotulo(t, s.rotulo)];
+  const eC = estiloCampo(s, "corpo");
+  const eA = estiloCampo(s, "autor");
   const s2 = isSerif(t.fTitle);
   const frase = `“${s.corpo || ""}”`;
-  let sz = Math.round(40 * Math.max(t.escala || 1, 0.8));
-  while (sz > 20 && alturaTexto(frase, W - 2 * P, sz, 1.28, t.fTitle, false, 0, t.wTitle) > 260) sz -= 2;
-  const h = alturaTexto(frase, W - 2 * P, sz, 1.28, t.fTitle, false, 0, t.wTitle);
+  let sz = Math.round(40 * Math.max(t.escala || 1, 0.8) * eC.escala);
+  while (sz > 20 && alturaTexto(frase, W - 2 * P, sz, 1.28, t.fTitle, false, 0, pesoDe(Math.min(t.wTitle, 600), eC)) > 260) sz -= 2;
+  const h = alturaTexto(frase, W - 2 * P, sz, 1.28, t.fTitle, false, 0, pesoDe(Math.min(t.wTitle, 600), eC));
   const y = Math.round((H - h) / 2);
-  out.push(txt({ x: P, y, w: W - 2 * P, text: frase, font: t.fTitle, italic: s2, size: sz, weight: Math.min(t.wTitle, 600), track: -0.015, color: t.fg, lh: 1.28 }));
-  if (s.autor) out.push(txt({ x: P, y: y + h + 32, w: W - 2 * P, text: s.autor, font: t.fBody, size: 20, color: t.muted }));
+  out.push(txt({ x: P, y, w: W - 2 * P, text: frase, font: t.fTitle, italic: s2, size: sz, weight: Math.min(t.wTitle, 600), track: -0.015, color: t.fg, lh: 1.28, ...so(eC) }));
+  if (s.autor) out.push(txt({ x: P, y: y + h + 32, w: W - 2 * P, text: s.autor, font: t.fBody, size: Math.round(20 * eA.escala), color: t.muted, ...so(eA) }));
   return out;
 }
 
 function layoutFim(t, s) {
   const out = [...rotulo(t, s.rotulo || ROTULO.fim)];
+  const eT = estiloCampo(s, "titulo");
+  const eS = estiloCampo(s, "subtitulo");
   const titulo = s.titulo || "Obrigado";
-  const sz = Math.round(56 * (t.escala || 1));
-  const tp = tituloProps(t, sz);
-  const hT = alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, t.wTitle);
+  const sz = Math.round(56 * (t.escala || 1) * eT.escala);
+  const tp = comEstilo(tituloProps(t, sz), eT);
+  const hT = alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, pesoDe(t.wTitle, eT));
   const sub = s.subtitulo || "";
-  const hS = sub ? alturaTexto(sub, 700, 24, 1.4, t.fBody, false, 0) : 0;
+  const ssz = Math.round(24 * eS.escala);
+  const hS = sub ? alturaTexto(sub, 700, ssz, 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
   const y = Math.round((H - (hT + (sub ? 22 + hS : 0))) / 2);
   out.push(txt({ x: P, y, w: W - 2 * P, text: titulo, ...tp }));
-  if (sub) out.push(txt({ x: P, y: y + hT + 22, w: 700, text: sub, font: t.fBody, size: 24, weight: t.wBody, color: t.muted, lh: 1.4 }));
+  if (sub) out.push(txt({ x: P, y: y + hT + 22, w: 700, text: sub, font: t.fBody, size: ssz, weight: t.wBody, color: t.muted, lh: 1.4, ...so(eS) }));
   return out;
 }
 
 export function layout(t, s) {
   const fn = { capa: layoutCapa, topicos: layoutTopicos, texto: layoutTexto, destaque: layoutDestaque, citacao: layoutCitacao, fim: layoutFim }[s.tipo] || layoutTexto;
-  return [...decoShapes(t, s.tipo), ...fn(t, s)];
+  return [...fundoShapes(t), ...decoShapes(t, s.tipo), ...fn(t, s), ...marcaShapes(t, s)];
 }

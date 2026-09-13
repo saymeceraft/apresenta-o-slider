@@ -60,6 +60,26 @@ function zip(files) {
   return out;
 }
 
+/** Converte um data URL em bytes, no navegador ou no Node. */
+function bytesDeDataUrl(url) {
+  const virgula = String(url).indexOf(",");
+  if (virgula < 0) return null;
+  const cabecalho = url.slice(0, virgula);
+  const base64 = url.slice(virgula + 1);
+  const ext = /image\/png/i.test(cabecalho) ? "png" : /image\/gif/i.test(cabecalho) ? "gif" : "jpeg";
+  try {
+    if (typeof atob === "function") {
+      const bin = atob(base64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return { bytes: out, ext };
+    }
+    return { bytes: new Uint8Array(Buffer.from(base64, "base64")), ext };
+  } catch {
+    return null;
+  }
+}
+
 const EMU = 12700;
 const emu = (px) => Math.round(px * EMU);
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
@@ -74,8 +94,19 @@ function fillXml(sh) {
   return `<a:solidFill><a:srgbClr val="${hex6(sh.fill)}">${al}</a:srgbClr></a:solidFill>`;
 }
 
-function spXml(sh, id) {
+function spXml(sh, id, rels) {
   const rot = sh.rot ? ` rot="${Math.round(sh.rot * 60000)}"` : "";
+  if (sh.k === "img") {
+    const rid = rels && rels.get(sh.src);
+    if (!rid) return "";
+    const alpha = sh.opacity != null && sh.opacity < 1
+      ? `<a:alphaModFix amt="${Math.round(sh.opacity * 100000)}"/>` : "";
+    return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="img${id}"/><p:cNvPicPr><a:picLocks noChangeAspect="0"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>`
+      + `<p:blipFill><a:blip r:embed="${rid}">${alpha}</a:blip>`
+      + `<a:stretch><a:fillRect/></a:stretch></p:blipFill>`
+      + `<p:spPr><a:xfrm${rot}><a:off x="${emu(sh.x)}" y="${emu(sh.y)}"/><a:ext cx="${emu(sh.w)}" cy="${emu(sh.h)}"/></a:xfrm>`
+      + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+  }
   if (sh.k === "rect" || sh.k === "ellipse") {
     const geo = sh.k === "ellipse" ? '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>'
       : sh.radius ? `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${Math.min(50000, Math.round((sh.radius / Math.min(sh.w, sh.h)) * 100000))}"/></a:avLst></a:prstGeom>`
@@ -98,11 +129,11 @@ function spXml(sh, id) {
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="t${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>`
     + `<p:spPr><a:xfrm${rot}><a:off x="${emu(sh.x)}" y="${emu(sh.y)}"/><a:ext cx="${emu(sh.w)}" cy="${emu(h)}"/></a:xfrm>`
     + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
-    + `<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>${runs}</p:txBody></p:sp>`;
+    + `<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>${runs}</p:txBody></p:sp>`;
 }
 
-function slideXml(t, s) {
-  const shapes = layout(t, s).map((sh, i) => spXml(sh, i + 2)).join("");
+function slideXml(t, s, rels) {
+  const shapes = layout(t, s).map((sh, i) => spXml(sh, i + 2, rels)).join("");
   const bg = t.bgGrad
     ? fillXml({ grad: t.bgGrad })
     : `<a:solidFill><a:srgbClr val="${hex6(t.bg, "FFFFFF")}"/></a:solidFill>`;
@@ -136,9 +167,31 @@ const LAYOUT = XML + `<p:sldLayout ${NS} type="blank" preserve="1"><p:cSld name=
 export function construirPptx(t, slides) {
   const n = slides.length;
   const arquivos = [];
+
+  // Imagens usadas (fundo e marca d'água) viram partes de mídia do pacote.
+  const midia = new Map(); // dataURL -> { nome, ext }
+  const porSlide = slides.map((s) => {
+    const usadas = [];
+    for (const sh of layout(t, s)) {
+      if (sh.k !== "img" || !sh.src) continue;
+      if (!midia.has(sh.src)) {
+        const dados = bytesDeDataUrl(sh.src);
+        if (!dados) continue;
+        const nome = `image${midia.size + 1}.${dados.ext === "jpeg" ? "jpeg" : dados.ext}`;
+        midia.set(sh.src, { nome, bytes: dados.bytes });
+        arquivos.push({ name: `ppt/media/${nome}`, data: dados.bytes });
+      }
+      if (!usadas.includes(sh.src)) usadas.push(sh.src);
+    }
+    const rels = new Map();
+    usadas.forEach((src, i) => rels.set(src, `rId${i + 2}`));
+    return { usadas, rels };
+  });
+  const extensoes = [...new Set([...midia.values()].map((m) => m.nome.split(".").pop()))];
   const tipos = [
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
     '<Default Extension="xml" ContentType="application/xml"/>',
+    ...extensoes.map((e) => `<Default Extension="${e}" ContentType="image/${e === "jpeg" ? "jpeg" : e}"/>`),
     '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>',
     '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>',
     '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>',
@@ -174,10 +227,16 @@ export function construirPptx(t, slides) {
   arquivos.push({ name: "ppt/theme/theme1.xml", data: THEME });
 
   slides.forEach((s, i) => {
-    arquivos.push({ name: `ppt/slides/slide${i + 1}.xml`, data: slideXml(t, s) });
+    const { usadas, rels } = porSlide[i];
+    arquivos.push({ name: `ppt/slides/slide${i + 1}.xml`, data: slideXml(t, s, rels) });
+    const relsImg = usadas
+      .filter((src) => midia.has(src))
+      .map((src, k) => `<Relationship Id="rId${k + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${midia.get(src).nome}"/>`)
+      .join("");
     arquivos.push({
       name: `ppt/slides/_rels/slide${i + 1}.xml.rels`, data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-        + `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`
+        + `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`
+        + `${relsImg}</Relationships>`
     });
   });
   return zip(arquivos);

@@ -123,6 +123,37 @@ try {
   const salvou = await page.evaluate(() => document.body.innerText.includes("Salvo"));
   passos.push(salvou ? "autosave indicou Salvo" : "autosave sem indicador visível");
 
+  // Ferramentas de texto: aumentar e colorir o título do primeiro slide
+  const antesEstilo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML);
+  await page.click('.editor-slide button[aria-label^="Aumentar título"]');
+  await page.click('.editor-slide button[aria-label^="Aumentar título"]');
+  await page.click('.editor-slide button[aria-label^="Negrito em título"]');
+  await new Promise((r) => setTimeout(r, 300));
+  const depoisEstilo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML);
+  if (antesEstilo === depoisEstilo) erros.push("as ferramentas de texto não mudaram o slide");
+  else passos.push("ferramentas de texto alteram o slide");
+
+  // Marca d'água de texto
+  await page.$$eval(".opcao", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Texto"); if (b) b.click(); });
+  await new Promise((r) => setTimeout(r, 200));
+  const campoMarca = await page.$('input[aria-label="Texto da marca d\'água"]');
+  if (!campoMarca) erros.push("campo da marca d'água não apareceu");
+  else {
+    await campoMarca.type("ADIT · Confidencial");
+    await new Promise((r) => setTimeout(r, 400));
+    const temMarca = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML.includes("Confidencial"));
+    if (!temMarca) erros.push("a marca d'água não apareceu no slide");
+    else passos.push("marca d'água aplicada");
+  }
+
+  // Plano de fundo em gradiente
+  await page.$$eval(".opcao", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Gradiente"); if (b) b.click(); });
+  await new Promise((r) => setTimeout(r, 400));
+  const temFundo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.getAttribute("style") + n.innerHTML).catch(() => "");
+  const gradienteOk = await page.$eval(".editor-slide .slide-quadro div > div", (n) => n.style.background.includes("gradient"));
+  if (!gradienteOk) erros.push("o plano de fundo em gradiente não foi aplicado");
+  else passos.push("plano de fundo em gradiente aplicado");
+
   // Trocar de modelo sem perder conteúdo
   await clicarTexto(page, "button", "Trocar modelo");
   await page.waitForSelector(".modelo", { timeout: 5000 });

@@ -7,6 +7,11 @@ export const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "
 function shapeHtml(sh) {
   const base = `position:absolute;left:${sh.x}px;top:${sh.y}px;`;
   const rot = sh.rot ? `transform:rotate(${sh.rot}deg);` : "";
+  if (sh.k === "img") {
+    const op = sh.opacity != null ? `opacity:${sh.opacity};` : "";
+    return `<img src="${esc(sh.src)}" alt="" style="${base}width:${sh.w}px;height:${sh.h}px;`
+      + `object-fit:${sh.ajuste || "cover"};${op}${rot}" />`;
+  }
   if (sh.k === "rect" || sh.k === "ellipse") {
     // Formas "soft" usam degradê radial em vez de filter:blur — o resultado é
     // praticamente igual e sobrevive à exportação em PDF e à impressão.

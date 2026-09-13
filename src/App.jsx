@@ -9,9 +9,11 @@ import EtapaConteudo from "./ui/EtapaConteudo.jsx";
 import EditorSlides from "./ui/EditorSlides.jsx";
 import Galeria from "./ui/Galeria.jsx";
 import Apresentar from "./ui/Apresentar.jsx";
+import PainelVisual from "./ui/PainelVisual.jsx";
 import SlideView from "./ui/SlideView.jsx";
 
 import { listarModelos, modeloDeTokens, MODEL_REGISTRY } from "./core/modelos.js";
+import { comporModelo, FUNDO_PADRAO, MARCA_PADRAO } from "./core/composicao.js";
 import { NOMES_FONTES } from "./core/fontes.js";
 import { novoSlide, duplicarSlide } from "./core/deck.js";
 import { montarSlides, ajustarQuantidade } from "./core/parser.js";
@@ -29,6 +31,8 @@ const CONFIG_PADRAO = {
 };
 
 const DECK_EXEMPLO = {
+  fundo: FUNDO_PADRAO,
+  marca: MARCA_PADRAO,
   slides: [
     { ...novoSlide("capa"), titulo: "Sua apresentação começa aqui", subtitulo: "Cole seu conteúdo para ver os modelos com ele" },
     { ...novoSlide("topicos"), titulo: "O que vamos abordar", itens: ["Contexto e cenário atual", "Principais desafios", "Proposta de solução", "Próximos passos"] },
@@ -95,12 +99,18 @@ export default function App() {
     () => modelos.find((t) => t.id === modeloId) || null,
     [modelos, modeloId]
   );
-  const modeloPreview = modelo || MODEL_REGISTRY.base[0];
+  const base = modelo || MODEL_REGISTRY.base[0];
+  // O modelo é o dono do visual; fundo e marca do deck entram por cima.
+  const modeloComposto = useMemo(() => comporModelo(modelo, deck), [modelo, deck]);
+  const modeloPreview = useMemo(() => comporModelo(base, deck), [base, deck]);
+  const modelosCompostos = useMemo(() => modelos.map((t) => comporModelo(t, deck)), [modelos, deck]);
   const slides = deck.slides;
 
   const flash = (m) => { setRecado(m); setTimeout(() => setRecado(""), 3200); };
   const irPara = (n) => { setEtapa(n); setMaximo((v) => Math.max(v, n)); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const atualizarDeck = (novos) => setDeck({ slides: novos });
+  const atualizarDeck = (novos) => setDeck((d) => ({ ...d, slides: novos }));
+  const mudarFundo = (fundo) => { setDeck((d) => ({ ...d, fundo })); setProprio(true); };
+  const mudarMarca = (marca) => { setDeck((d) => ({ ...d, marca })); setProprio(true); };
 
   /* ---------- etapa 1: conteúdo ---------- */
   const montar = () => {
@@ -202,7 +212,7 @@ export default function App() {
     try {
       baixar(
         nomeArquivo(deck, modelo, "pptx"),
-        construirPptx(modelo, slides),
+        construirPptx(modeloComposto, slides),
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
       );
       flash("PowerPoint baixado.");
@@ -218,7 +228,7 @@ export default function App() {
     if (!modelo) return;
     setExportando("pdf");
     try {
-      await exportarPdf(modelo, slides, nomeArquivo(deck, modelo, "pdf"),
+      await exportarPdf(modeloComposto, slides, nomeArquivo(deck, modelo, "pdf"),
         (i, total) => setExportando(`pdf:${i}/${total}`));
       flash("PDF baixado.");
     } catch (e) {
@@ -320,7 +330,7 @@ export default function App() {
       {etapa === 3 && (
         <section className="secao">
           <Galeria
-            modelos={modelos}
+            modelos={modelosCompostos}
             slides={slides}
             escolhido={modeloId}
             recomendado={recomendado}
@@ -350,6 +360,9 @@ export default function App() {
               )}
             </div>
           </div>
+          <div className="secao" style={{ marginTop: 0, marginBottom: 20 }}>
+            <PainelVisual fundo={deck.fundo} marca={deck.marca} aoMudarFundo={mudarFundo} aoMudarMarca={mudarMarca} />
+          </div>
           <EditorSlides
             slides={slides}
             modelo={modeloPreview}
@@ -369,7 +382,7 @@ export default function App() {
             <span className="dica">{modelo.nome} · {slides.length} slides · 16:9</span>
           </div>
           <div className="moldura" style={{ maxWidth: 760 }}>
-            <SlideView modelo={modelo} slide={slides[0]} />
+            <SlideView modelo={modeloComposto} slide={slides[0]} />
           </div>
           <div className="opcoes" style={{ marginTop: 16 }}>
             <button type="button" className="btn btn-principal" onClick={exportarPowerPoint} disabled={!!exportando}>
@@ -383,12 +396,12 @@ export default function App() {
           <div className="opcoes" style={{ marginTop: 12 }}>
             <span className="dica">Outras opções</span>
             <button type="button" className="btn btn-pequeno" onClick={() => {
-              const r = imprimir(modelo, slides, nomeArquivo(deck, modelo, "pdf"));
+              const r = imprimir(modeloComposto, slides, nomeArquivo(deck, modelo, "pdf"));
               flash(r ? "Use Imprimir e escolha Salvar como PDF." : "O navegador bloqueou a impressão. Baixe o HTML.");
             }}>
               <Printer size={15} /> Imprimir
             </button>
-            <button type="button" className="btn btn-pequeno" onClick={() => { baixarHtml(modelo, slides, nomeArquivo(deck, modelo, "html")); flash("HTML baixado."); }}>
+            <button type="button" className="btn btn-pequeno" onClick={() => { baixarHtml(modeloComposto, slides, nomeArquivo(deck, modelo, "html")); flash("HTML baixado."); }}>
               <Globe size={15} /> Baixar HTML
             </button>
             <button type="button" className="btn btn-pequeno" onClick={async () => flash(await copiarTexto(briefing(modelo, deck)) ? "Briefing copiado." : "Não consegui copiar.")}>
@@ -450,7 +463,7 @@ export default function App() {
       </div>
 
       {apresentando && modelo && (
-        <Apresentar modelo={modelo} slides={slides} aoSair={() => setApresentando(false)} />
+        <Apresentar modelo={modeloComposto} slides={slides} aoSair={() => setApresentando(false)} />
       )}
     </div>
   );
