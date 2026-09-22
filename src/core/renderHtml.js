@@ -23,7 +23,8 @@ function shapeHtml(sh) {
     const st = sh.stroke ? `border:1px solid ${sh.stroke};box-sizing:border-box;` : "";
     const r = sh.k === "ellipse" ? "border-radius:50%;" : sh.radius ? `border-radius:${sh.radius}px;` : "";
     const op = !macia && sh.opacity != null ? `opacity:${sh.opacity};` : "";
-    return `<div style="${base}width:${sh.w}px;height:${sh.h}px;${fill}${st}${r}${op}${rot}"></div>`;
+    const sombra = sh.sombra ? `box-shadow:${sh.sombra};` : "";
+    return `<div style="${base}width:${sh.w}px;height:${sh.h}px;${fill}${st}${r}${op}${sombra}${rot}"></div>`;
   }
   const al = { l: "left", ctr: "center", r: "right" }[sh.align || "l"];
   const style = `${base}width:${sh.w}px;font-family:${F(sh.font)};font-size:${sh.size}px;font-weight:${sh.weight};`

@@ -1,5 +1,5 @@
 import { F, CW, isSerif } from "./fontes.js";
-import { sobre } from "./cores.js";
+import { sobre, misturar } from "./cores.js";
 import { ROTULO } from "./deck.js";
 import { fundoShapes, marcaShapes } from "./composicao.js";
 
@@ -160,9 +160,45 @@ function tituloProps(t, size, cor) {
   return { font: t.fTitle, size, weight: t.wTitle, track: t.track, upper: t.upper, lh: t.upper ? 1.04 : 1.08, color: cor || t.fg };
 }
 
-function rotulo(t, texto, cor) {
+const SOMBRAS = [null, "0 1px 2px rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.05)",
+  "0 1px 2px rgba(0,0,0,.05), 0 10px 26px rgba(0,0,0,.09)",
+  "0 2px 4px rgba(0,0,0,.06), 0 18px 44px rgba(0,0,0,.14)"];
+
+/* O rótulo ganha o formato que a marca usa: pílula, bloco sólido, barra
+   ou moldura fina. É o que dá o "sotaque" de cada design system. */
+function rotuloShapes(t, texto, x, y, cor) {
   if (!texto) return [];
-  return [txt({ x: P, y: PT, w: W - 2 * P, text: texto, font: t.fBody, size: 15, weight: 600, color: cor || t.accent, lh: 1.2 })];
+  const chip = t.comp?.chip || "nenhum";
+  const size = 15;
+  const compacto = chip === "nenhum" || chip === "barra";
+  const larg = Math.round(texto.length * size * 0.56) + (compacto ? 0 : 36);
+  const alt = 30;
+  const base = { font: t.fBody, size, weight: 600, lh: 1.2 };
+
+  if (chip === "pill" || chip === "solido") {
+    const fundo = cor || t.accent;
+    return [
+      S({ k: "rect", x, y, w: larg, h: alt, fill: fundo, radius: chip === "pill" ? 9999 : Math.min(t.radius, 6) }),
+      txt({ ...base, x, y: y + 7, w: larg, text: texto, align: "ctr", color: sobre(fundo) }),
+    ];
+  }
+  if (chip === "quadro") {
+    return [
+      S({ k: "rect", x, y, w: larg, h: alt, stroke: t.hairline, radius: Math.min(t.radius, 10) }),
+      txt({ ...base, x, y: y + 7, w: larg, text: texto, align: "ctr", color: cor || t.accent }),
+    ];
+  }
+  if (chip === "barra") {
+    return [
+      S({ k: "rect", x, y: y + 6, w: 22, h: 4, fill: cor || t.accent }),
+      txt({ ...base, x: x + 34, y, w: 400, text: texto, color: cor || t.accent }),
+    ];
+  }
+  return [txt({ ...base, x, y, w: 400, text: texto, color: cor || t.accent })];
+}
+
+function rotulo(t, texto, cor) {
+  return rotuloShapes(t, texto, P, PT, cor);
 }
 
 function layoutCapa(t, s) {
@@ -178,8 +214,10 @@ function layoutCapa(t, s) {
   let size = Math.round(base * (t.escala || 1) * (t.upper ? 0.92 : 1) * (estreita ? 0.82 : 1) * eT.escala);
   const tp = () => comEstilo(tituloProps(t, size), eT);
   const pT = pesoDe(t.wTitle, eT);
-  const hT = () => alturaTexto(titulo, wTxt, size, tp().lh, t.fTitle, t.upper, t.track, pT);
-  while (size > 26 && hT() > 250) size -= 4;
+  const midiaCapa = !!t.comp?.mediaCapa && t.deco !== "mosaico" && (t.capa === "esquerda" || !t.capa);
+  const colTitulo = midiaCapa ? 470 : wTxt;
+  const hT = () => alturaTexto(titulo, colTitulo, size, tp().lh, t.fTitle, t.upper, t.track, pT);
+  while (size > 26 && hT() > (midiaCapa ? 300 : 250)) size -= 4;
   const hSub = sub ? alturaTexto(sub, Math.min(wTxt, 700), SUB(24), 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
 
   switch (t.capa) {
@@ -267,12 +305,21 @@ function layoutCapa(t, s) {
       return out;
     }
     default: {
-      const hs = sub ? alturaTexto(sub, Math.min(wTxt, 700), SUB(24), 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
+      if (midiaCapa) {
+        // Marcas orientadas a imagem: a capa traz o bloco de mídia ao lado.
+        const r = t.comp.mediaRaio ?? t.radius;
+        const sombra = SOMBRAS[t.comp?.sombra || 0];
+        out.push(S({ k: "rect", x: 560, y: 64, w: 336, h: 412, fill: t.surface, radius: r, sombra }));
+        out.push(S({ k: "rect", x: 560, y: 64, w: 336, h: 250, fill: misturar(t.accent, t.surface, 0.22), radius: r }));
+        out.push(S({ k: "rect", x: 592, y: 348, w: 200, h: 14, fill: misturar(t.fg, t.surface, 0.2), radius: 7 }));
+        out.push(S({ k: "rect", x: 592, y: 378, w: 132, h: 12, fill: misturar(t.fg, t.surface, 0.12), radius: 6 }));
+      }
+      const hs = sub ? alturaTexto(sub, Math.min(colTitulo, 700), SUB(24), 1.4, t.fBody, false, 0, pesoDe(t.wBody, eS)) : 0;
       const y0 = H - PT - hs - (sub ? 28 : 0) - hT();
       out.push(...rotulo(t, "Apresentação"));
-      out.push(S({ k: "rect", x: P, y: y0 - 33, w: 56, h: 5, fill: t.accent, radius: Math.min(t.radius, 3) }));
-      out.push(txt({ x: P, y: y0, w: wTxt, text: titulo, ...tp() }));
-      if (sub) out.push(txt({ x: P, y: y0 + hT() + 28, w: Math.min(wTxt, 700), text: sub, font: t.fBody, size: SUB(24), weight: t.wBody, color: t.muted, lh: 1.4, ...so(eS) }));
+      if (!midiaCapa) out.push(S({ k: "rect", x: P, y: y0 - 33, w: 56, h: 5, fill: t.accent, radius: Math.min(t.radius, 3) }));
+      out.push(txt({ x: P, y: y0, w: colTitulo, text: titulo, ...tp() }));
+      if (sub) out.push(txt({ x: P, y: y0 + hT() + 28, w: Math.min(colTitulo, 700), text: sub, font: t.fBody, size: SUB(24), weight: t.wBody, color: t.muted, lh: 1.4, ...so(eS) }));
       return out;
     }
   }
@@ -312,9 +359,9 @@ function layoutTopicos(t, s) {
       out.push(S({ k: "rect", x: cx, y: cy, w: cardW, h: t.linhaGrossa ? 6 : 1, fill: t.fg }));
       padX = 0; padY = 18;
     } else if (t.cartao === "borda") {
-      out.push(S({ k: "rect", x: cx, y: cy, w: cardW, h: cardH, stroke: t.hairline, radius: t.radius }));
+      out.push(S({ k: "rect", x: cx, y: cy, w: cardW, h: cardH, stroke: t.hairline, radius: t.radius, sombra: SOMBRAS[t.comp?.sombra || 0] }));
     } else {
-      out.push(S({ k: "rect", x: cx, y: cy, w: cardW, h: cardH, fill: t.surface, radius: t.radius }));
+      out.push(S({ k: "rect", x: cx, y: cy, w: cardW, h: cardH, fill: t.surface, radius: t.radius, sombra: SOMBRAS[t.comp?.sombra || 0] }));
     }
     out.push(txt({ x: cx + padX, y: cy + padY, w: 60, text: String(i + 1).padStart(2, "0"), font: t.fTitle, size: 17, weight: 700, color: num }));
     out.push(txt({ x: cx + padX, y: cy + padY + 27, w: cardW - padX * 2, text: item, font: t.fBody, size: fsz, weight: 500, color: cor, lh: 1.3, ...so(eI) }));

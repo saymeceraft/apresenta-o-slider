@@ -112,7 +112,12 @@ function spXml(sh, id, rels) {
       : sh.radius ? `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${Math.min(50000, Math.round((sh.radius / Math.min(sh.w, sh.h)) * 100000))}"/></a:avLst></a:prstGeom>`
         : '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
     const ln = sh.stroke ? `<a:ln w="12700"><a:solidFill><a:srgbClr val="${hex6(sh.stroke)}"/></a:solidFill></a:ln>` : "<a:ln><a:noFill/></a:ln>";
-    const ef = sh.soft ? `<a:effectLst><a:softEdge rad="${emu(Math.min(sh.soft, Math.min(sh.w, sh.h) / 2 - 1))}"/></a:effectLst>` : "";
+    const sombra = sh.sombra
+      ? '<a:effectLst><a:outerShdw blurRad="228600" dist="76200" dir="5400000" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="14000"/></a:srgbClr></a:outerShdw></a:effectLst>'
+      : "";
+    const ef = sh.soft
+      ? `<a:effectLst><a:softEdge rad="${emu(Math.min(sh.soft, Math.min(sh.w, sh.h) / 2 - 1))}"/></a:effectLst>`
+      : sombra;
     return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="s${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>`
       + `<p:spPr><a:xfrm${rot}><a:off x="${emu(sh.x)}" y="${emu(sh.y)}"/><a:ext cx="${emu(sh.w)}" cy="${emu(sh.h)}"/></a:xfrm>`
       + `${geo}${fillXml(sh)}${ln}${ef}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
