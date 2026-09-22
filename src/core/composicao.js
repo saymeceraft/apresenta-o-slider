@@ -7,7 +7,8 @@ import { sobre, hexA, lum } from "./cores.js";
 export const FUNDO_PADRAO = { tipo: "modelo", cor: "#0b1020", cor2: "#4f2bff", imagem: null, escurecer: 0.35 };
 export const MARCA_PADRAO = {
   ativa: false, tipo: "texto", texto: "", imagem: null,
-  posicao: "inferior-direita", tamanho: 1, opacidade: 0.35, naCapa: true,
+  posicao: "inferior-direita", x: null, y: null,
+  tamanho: 1, opacidade: 0.35, naCapa: true,
 };
 
 export const POSICOES = [
@@ -54,6 +55,19 @@ const CANTOS = {
   centro: (w, h) => ({ x: (960 - w) / 2, y: (540 - h) / 2 }),
 };
 
+/** Onde a marca fica: posição livre (x, y de 0 a 1) ou um dos cantos. */
+export function posicaoMarca(m, w, h) {
+  if (typeof m.x === "number" && typeof m.y === "number") {
+    return {
+      x: Math.round(Math.min(Math.max(m.x, 0), 1) * (960 - w)),
+      y: Math.round(Math.min(Math.max(m.y, 0), 1) * (540 - h)),
+    };
+  }
+  const canto = CANTOS[m.posicao] || CANTOS["inferior-direita"];
+  const p = canto(w, h);
+  return { x: Math.round(p.x), y: Math.round(p.y) };
+}
+
 /** Formas da marca d'água para um slide. */
 export function marcaShapes(t, slide) {
   const m = t.marca;
@@ -64,24 +78,24 @@ export function marcaShapes(t, slide) {
 
   if (m.tipo === "imagem" && m.imagem) {
     const w = Math.round(150 * escala);
-    const h = Math.round(w / (Number(m.proporcao) || 3));
-    const { x, y } = (CANTOS[m.posicao] || CANTOS["inferior-direita"])(w, h);
+    const h = Math.round(w / (Number(m.proporcao) || 3)) || 40;
+    const { x, y } = posicaoMarca(m, w, h);
     return [{ k: "img", src: m.imagem, x, y, w, h, opacity: opacidade, ajuste: "contain" }];
   }
 
   const texto = String(m.texto || "").trim();
   if (!texto) return [];
-  const size = Math.round((m.posicao === "centro" ? 68 : 20) * escala);
+  const size = Math.round((m.inclinada ? 60 : 20) * escala);
   const w = Math.min(760, Math.round(texto.length * size * 0.62) + 20);
   const h = Math.round(size * 1.3);
-  const { x, y } = (CANTOS[m.posicao] || CANTOS["inferior-direita"])(w, h);
+  const { x, y } = posicaoMarca(m, w, h);
   return [{
     k: "text", x, y, w, text: texto,
     font: t.fBody, size, weight: 600, lh: 1.3, track: m.posicao === "centro" ? 0.02 : 0,
     color: sobre(t.bg === "#ffffff" ? "#ffffff" : t.bg) === "#ffffff" ? "#ffffff" : "#111111",
     opacity: opacidade,
-    align: m.posicao.endsWith("direita") ? "r" : m.posicao === "centro" ? "ctr" : "l",
-    rot: m.posicao === "centro" ? -22 : 0,
+    align: typeof m.x === "number" ? "l" : m.posicao.endsWith("direita") ? "r" : m.posicao === "centro" ? "ctr" : "l",
+    rot: m.inclinada ? -22 : 0,
   }];
 }
 

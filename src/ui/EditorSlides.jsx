@@ -39,7 +39,7 @@ function Campo({ nome, estilo, aoMudarEstilo, children }) {
   );
 }
 
-function CartaoSlide({ slide, indice, total, modelo, aoMudar, aoMover, aoDuplicar, aoExcluir }) {
+function CartaoSlide({ slide, indice, total, modelo, temMarca, aoMudar, aoMover, aoDuplicar, aoExcluir }) {
   const set = (k, v) => aoMudar({ ...slide, [k]: v });
   const campos = (TIPOS.find((t) => t.id === slide.tipo) || TIPOS[0]).campos;
   const estiloDe = (campo) => (slide.estilo || {})[campo] || {};
@@ -70,10 +70,12 @@ function CartaoSlide({ slide, indice, total, modelo, aoMudar, aoMover, aoDuplica
           <button type="button" className="btn btn-icone" onClick={aoExcluir} disabled={total <= 1} aria-label="Excluir slide" style={{ color: "var(--perigo)" }}><Trash2 size={15} /></button>
         </div>
         <div style={{ width: "100%" }}>
-          <button type="button" className="opcao" style={{ height: 28, fontSize: 13 }} aria-pressed={!slide.semMarca}
-            onClick={() => aoMudar({ ...slide, semMarca: !slide.semMarca })}>
-            Marca d'água neste slide
-          </button>
+          {temMarca && (
+            <button type="button" className="opcao" style={{ height: 28, fontSize: 13 }} aria-pressed={!slide.semMarca}
+              onClick={() => aoMudar({ ...slide, semMarca: !slide.semMarca })}>
+              {slide.semMarca ? "Mostrar marca aqui" : "Ocultar marca aqui"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,7 +150,7 @@ function CartaoSlide({ slide, indice, total, modelo, aoMudar, aoMover, aoDuplica
   );
 }
 
-export default function EditorSlides({ slides, modelo, aoMudar, aoMover, aoDuplicar, aoExcluir, aoAdicionar }) {
+export default function EditorSlides({ slides, modelo, temMarca, aoMudar, aoMover, aoDuplicar, aoExcluir, aoAdicionar }) {
   return (
     <>
       <div className="lista-slides">
@@ -159,6 +161,7 @@ export default function EditorSlides({ slides, modelo, aoMudar, aoMover, aoDupli
             indice={i}
             total={slides.length}
             modelo={modelo}
+            temMarca={temMarca}
             aoMudar={(x) => aoMudar(i, x)}
             aoMover={(d) => aoMover(i, d)}
             aoDuplicar={() => aoDuplicar(i)}

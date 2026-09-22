@@ -128,12 +128,24 @@ try {
   await page.click('.editor-slide button[aria-label^="Aumentar título"]');
   await page.click('.editor-slide button[aria-label^="Aumentar título"]');
   await page.click('.editor-slide button[aria-label^="Negrito em título"]');
-  await new Promise((r) => setTimeout(r, 300));
+  await page.$eval('.editor-slide input[aria-label^="Cor de título"]', (n) => {
+    // O React acompanha o valor por um setter próprio; usamos o nativo para o onChange disparar.
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    setter.call(n, "#ff0055");
+    n.dispatchEvent(new Event("input", { bubbles: true }));
+    n.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await new Promise((r) => setTimeout(r, 350));
+  const corAplicada = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML.includes("rgb(255, 0, 85)") || n.innerHTML.includes("#ff0055"));
+  if (!corAplicada) erros.push("a cor escolhida não chegou ao slide");
+  else passos.push("cor aplicada no slide");
   const depoisEstilo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML);
   if (antesEstilo === depoisEstilo) erros.push("as ferramentas de texto não mudaram o slide");
   else passos.push("ferramentas de texto alteram o slide");
 
-  // Marca d'água de texto
+  // Marca d'água de texto (o painel abre em "Ajustar")
+  await page.$$eval("button", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Ajustar"); if (b) b.click(); });
+  await new Promise((r) => setTimeout(r, 250));
   await page.$$eval(".opcao", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Texto"); if (b) b.click(); });
   await new Promise((r) => setTimeout(r, 200));
   const campoMarca = await page.$('input[aria-label="Texto da marca d\'água"]');
@@ -144,6 +156,21 @@ try {
     const temMarca = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML.includes("Confidencial"));
     if (!temMarca) erros.push("a marca d'água não apareceu no slide");
     else passos.push("marca d'água aplicada");
+  }
+
+  // Arrastar a marca d'água para outra posição
+  const alvo = await page.$(".posicionador");
+  if (!alvo) erros.push("posicionador da marca não apareceu");
+  else {
+    const caixa = await alvo.boundingBox();
+    await page.mouse.move(caixa.x + caixa.width * 0.8, caixa.y + caixa.height * 0.8);
+    await page.mouse.down();
+    await page.mouse.move(caixa.x + caixa.width * 0.2, caixa.y + caixa.height * 0.25, { steps: 8 });
+    await page.mouse.up();
+    await new Promise((r) => setTimeout(r, 300));
+    const pos = await page.$eval(".alvo-marca", (n) => n.style.left);
+    passos.push(`marca arrastada para left ${pos}`);
+    if (parseFloat(pos) > 40) erros.push("arrastar a marca não mudou a posição");
   }
 
   // Plano de fundo em gradiente

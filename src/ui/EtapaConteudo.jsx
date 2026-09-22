@@ -5,26 +5,21 @@ const QUANTIDADES = [
   ["auto", "Automático"], [5, "5"], [8, "8"], [10, "10"], [15, "15"],
 ];
 
-const EXEMPLO = `História do Campo ADIT
+const ORIENTACAO = [
+  "A primeira linha vira a capa.",
+  "Uma linha curta sozinha vira o título de um slide.",
+  "Cada parágrafo vira um slide de texto.",
+  "Linhas com travessão viram lista.",
+  "Frase entre aspas vira citação.",
+];
 
-Tudo começou em 2015, com poucas famílias reunidas em uma casa.
-
-Crescimento
-Hoje são várias congregações espalhadas pela região.
-
-Próximos passos
-Continuar expandindo o trabalho e formar novos líderes.`;
-
-const AVANCADO = `# Capa da apresentação
-Linha de apoio
-
-## Título do slide
-- primeiro item
-- segundo item
-
-> Uma frase de impacto
-
-! 42 | legenda do número`;
+const ORIENTACAO_AVANCADA = [
+  "# título — capa",
+  "## título — novo slide",
+  "- item — lista",
+  "> frase — citação",
+  "! 42 | legenda — número em destaque",
+];
 
 export default function EtapaConteudo({
   texto, setTexto, config, setConfig, aoMontar, aoGerarIA,
@@ -41,9 +36,12 @@ export default function EtapaConteudo({
           className="campo"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          placeholder={config.avancado ? AVANCADO : EXEMPLO}
+          placeholder="Escreva ou cole aqui o texto da apresentação."
           rows={10}
         />
+        <ul className="orientacao">
+          {(config.avancado ? ORIENTACAO_AVANCADA : ORIENTACAO).map((linha) => <li key={linha}>{linha}</li>)}
+        </ul>
         <div className="opcoes" style={{ marginTop: 12 }}>
           <button type="button" className="btn btn-principal" onClick={aoMontar} disabled={!texto.trim()}>
             <Wand2 size={17} /> Organizar em slides
@@ -62,15 +60,7 @@ export default function EtapaConteudo({
             </button>
           )}
         </div>
-        {config.avancado ? (
-          <p className="dica" style={{ marginTop: 10 }}>
-            <code># capa</code> · <code>## slide</code> · <code>- item</code> · <code>&gt; citação</code> · <code>! número | legenda</code>
-          </p>
-        ) : (
-          <p className="dica" style={{ marginTop: 10 }}>
-            Escreva normalmente. O sistema reconhece o título, as seções, as listas e os parágrafos.
-          </p>
-        )}
+
       </section>
 
       <section className="secao">

@@ -315,9 +315,14 @@ export default function App() {
           <p className="dica" style={{ marginBottom: 14 }}>
             Confira a ordem e o tipo de cada slide. Dá para ajustar tudo agora ou depois, na revisão.
           </p>
+          <div style={{ marginBottom: 18 }}>
+            <PainelVisual fundo={deck.fundo} marca={deck.marca} modelo={modeloPreview} slide={slides[0]}
+              aoMudarFundo={mudarFundo} aoMudarMarca={mudarMarca} />
+          </div>
           <EditorSlides
             slides={slides}
-            modelo={null}
+            modelo={modeloPreview}
+            temMarca={!!modeloPreview.marca}
             aoMudar={mudarSlide}
             aoMover={moverSlide}
             aoDuplicar={duplicar}
@@ -360,12 +365,14 @@ export default function App() {
               )}
             </div>
           </div>
-          <div className="secao" style={{ marginTop: 0, marginBottom: 20 }}>
-            <PainelVisual fundo={deck.fundo} marca={deck.marca} aoMudarFundo={mudarFundo} aoMudarMarca={mudarMarca} />
+          <div style={{ marginBottom: 18 }}>
+            <PainelVisual fundo={deck.fundo} marca={deck.marca} modelo={modeloPreview} slide={slides[0]}
+              aoMudarFundo={mudarFundo} aoMudarMarca={mudarMarca} />
           </div>
           <EditorSlides
             slides={slides}
             modelo={modeloPreview}
+            temMarca={!!modeloPreview.marca}
             aoMudar={mudarSlide}
             aoMover={moverSlide}
             aoDuplicar={duplicar}
@@ -428,7 +435,7 @@ export default function App() {
             <ArrowLeft size={15} /> Voltar
           </button>
         )}
-        <span className="barra-info">
+        <span className={`barra-info${recado ? " recado" : ""}`}>
           {recado || (etapa === 1 ? "Comece pelo conteúdo"
             : etapa === 2 ? `${slides.length} slides prontos para receber um design`
               : etapa === 3 ? "Toque em um modelo para ver a sua apresentação nele"

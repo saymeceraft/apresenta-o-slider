@@ -184,12 +184,21 @@ textarea.campo { line-height: 1.55; min-height: 180px; }
   .modal-grade { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .app { padding: 20px 14px 170px; }
+  .app { padding: 20px 14px 150px; }
   .galeria, .lista-slides { grid-template-columns: 1fr; }
-  .barra { border-radius: 18px; gap: 6px; padding: 8px; }
+  /* No celular a barra ocupa a largura toda e some com o texto de apoio,
+     que só aparece quando é um aviso. */
+  .barra {
+    left: 0; right: 0; bottom: 0; transform: none; max-width: none;
+    border-radius: 16px 16px 0 0; border-bottom: none; gap: 6px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
   .barra .btn { flex: 1 1 auto; }
-  .barra-info { width: 100%; text-align: center; }
+  .barra-info { display: none; }
+  .barra-info.recado { display: block; width: 100%; text-align: center; }
   .modal { padding: 14px; border-radius: 16px; }
+  h1.titulo { font-size: 26px; }
+  p.subtitulo { font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .modelo { transition: none; }
@@ -213,3 +222,21 @@ textarea.campo { line-height: 1.55; min-height: 180px; }
 .fmt-cor { width: 26px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer; }
 .grade-visual { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 860px) { .grade-visual { grid-template-columns: 1fr; } }
+
+/* ---------- posicionar a marca d'água ---------- */
+.posicionador { position: relative; cursor: grab; touch-action: none; }
+.posicionador:active { cursor: grabbing; }
+.alvo-marca {
+  position: absolute; border: 2px dashed var(--accent); border-radius: 6px;
+  background: rgba(0, 122, 255, 0.12); pointer-events: none;
+}
+
+/* ---------- orientação de escrita ---------- */
+.orientacao {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.orientacao li {
+  font-size: 12.5px; color: var(--muted); background: #fff;
+  border: 1px solid var(--border); border-radius: 9999px; padding: 4px 11px;
+}
