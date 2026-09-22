@@ -1,5 +1,5 @@
 import { AlignCenter, AlignLeft, AlignRight, ArrowUp, ArrowDown, Bold, Copy, Italic, Minus, Plus, RotateCcw, Trash2, X } from "lucide-react";
-import { TIPOS } from "../core/deck.js";
+import { TIPOS, converterSlide } from "../core/deck.js";
 import SlideView from "./SlideView.jsx";
 
 const ALINHAMENTOS = [["l", AlignLeft, "à esquerda"], ["ctr", AlignCenter, "centralizado"], ["r", AlignRight, "à direita"]];
@@ -13,17 +13,17 @@ function BarraEstilo({ nome, estilo, aoMudar }) {
 
   return (
     <div className="barra-estilo" role="group" aria-label={`Formatação: ${nome}`}>
-      <button type="button" className="fmt" onClick={() => set({ escala: Math.max(0.6, Math.round((escala - 0.1) * 10) / 10) })} aria-label={`Diminuir ${nome}`}><Minus size={13} /></button>
+      <button type="button" className="fmt" title={`Diminuir ${nome}`} onClick={() => set({ escala: Math.max(0.6, Math.round((escala - 0.1) * 10) / 10) })} aria-label={`Diminuir ${nome}`}><Minus size={13} /></button>
       <span className="fmt-valor" aria-hidden="true">{Math.round(escala * 100)}%</span>
-      <button type="button" className="fmt" onClick={() => set({ escala: Math.min(2, Math.round((escala + 0.1) * 10) / 10) })} aria-label={`Aumentar ${nome}`}><Plus size={13} /></button>
-      <button type="button" className="fmt" aria-pressed={e.negrito === true} onClick={() => set({ negrito: e.negrito === true ? null : true })} aria-label={`Negrito em ${nome}`}><Bold size={13} /></button>
-      <button type="button" className="fmt" aria-pressed={e.italico === true} onClick={() => set({ italico: e.italico === true ? null : true })} aria-label={`Itálico em ${nome}`}><Italic size={13} /></button>
+      <button type="button" className="fmt" title={`Aumentar ${nome}`} onClick={() => set({ escala: Math.min(2, Math.round((escala + 0.1) * 10) / 10) })} aria-label={`Aumentar ${nome}`}><Plus size={13} /></button>
+      <button type="button" className="fmt" title={`Negrito em ${nome}`} aria-pressed={e.negrito === true} onClick={() => set({ negrito: e.negrito === true ? null : true })} aria-label={`Negrito em ${nome}`}><Bold size={13} /></button>
+      <button type="button" className="fmt" title={`Itálico em ${nome}`} aria-pressed={e.italico === true} onClick={() => set({ italico: e.italico === true ? null : true })} aria-label={`Itálico em ${nome}`}><Italic size={13} /></button>
       {ALINHAMENTOS.map(([v, Icone, desc]) => (
-        <button key={v} type="button" className="fmt" aria-pressed={e.align === v} onClick={() => set({ align: e.align === v ? null : v })} aria-label={`Alinhar ${desc}`}><Icone size={13} /></button>
+        <button key={v} type="button" className="fmt" title={`Alinhar ${desc}`} aria-pressed={e.align === v} onClick={() => set({ align: e.align === v ? null : v })} aria-label={`Alinhar ${desc}`}><Icone size={13} /></button>
       ))}
-      <input type="color" className="fmt-cor" value={e.cor || "#000000"} onChange={(ev) => set({ cor: ev.target.value })} aria-label={`Cor de ${nome}`} />
+      <input type="color" className="fmt-cor" title={`Cor de ${nome}`} value={e.cor || "#000000"} onChange={(ev) => set({ cor: ev.target.value })} aria-label={`Cor de ${nome}`} />
       {mexido && (
-        <button type="button" className="fmt" onClick={() => aoMudar({})} aria-label={`Voltar ${nome} ao padrão do modelo`}><RotateCcw size={13} /></button>
+        <button type="button" className="fmt" title={`Voltar ${nome} ao padrão do modelo`} onClick={() => aoMudar({})} aria-label={`Voltar ${nome} ao padrão do modelo`}><RotateCcw size={13} /></button>
       )}
     </div>
   );
@@ -58,16 +58,16 @@ function CartaoSlide({ slide, indice, total, modelo, temMarca, aoMudar, aoMover,
         <select
           className="select-tipo"
           value={slide.tipo}
-          onChange={(e) => aoMudar({ ...slide, tipo: e.target.value })}
+          onChange={(e) => aoMudar(converterSlide(slide, e.target.value))}
           aria-label={`Tipo do slide ${indice + 1}`}
         >
           {TIPOS.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
         </select>
         <div className="editor-acoes">
-          <button type="button" className="btn btn-icone" onClick={() => aoMover(-1)} disabled={indice === 0} aria-label="Mover para cima"><ArrowUp size={15} /></button>
-          <button type="button" className="btn btn-icone" onClick={() => aoMover(1)} disabled={indice === total - 1} aria-label="Mover para baixo"><ArrowDown size={15} /></button>
-          <button type="button" className="btn btn-icone" onClick={aoDuplicar} aria-label="Duplicar slide"><Copy size={15} /></button>
-          <button type="button" className="btn btn-icone" onClick={aoExcluir} disabled={total <= 1} aria-label="Excluir slide" style={{ color: "var(--perigo)" }}><Trash2 size={15} /></button>
+          <button type="button" className="btn btn-icone" onClick={() => aoMover(-1)} disabled={indice === 0} title="Mover para cima" aria-label="Mover para cima"><ArrowUp size={15} /></button>
+          <button type="button" className="btn btn-icone" onClick={() => aoMover(1)} disabled={indice === total - 1} title="Mover para baixo" aria-label="Mover para baixo"><ArrowDown size={15} /></button>
+          <button type="button" className="btn btn-icone" onClick={aoDuplicar} title="Duplicar slide" aria-label="Duplicar slide"><Copy size={15} /></button>
+          <button type="button" className="btn btn-icone" onClick={aoExcluir} disabled={total <= 1} title="Excluir slide" aria-label="Excluir slide" style={{ color: "var(--perigo)" }}><Trash2 size={15} /></button>
         </div>
         <div style={{ width: "100%" }}>
           {temMarca && (
@@ -135,7 +135,7 @@ function CartaoSlide({ slide, indice, total, modelo, temMarca, aoMudar, aoMover,
                   placeholder={`Item ${k + 1}`}
                   aria-label={`Item ${k + 1}`}
                 />
-                <button type="button" className="btn btn-icone" onClick={() => set("itens", slide.itens.filter((_, j) => j !== k))} aria-label={`Remover item ${k + 1}`}><X size={15} /></button>
+                <button type="button" className="btn btn-icone" onClick={() => set("itens", slide.itens.filter((_, j) => j !== k))} title="Remover item" aria-label={`Remover item ${k + 1}`}><X size={15} /></button>
               </div>
             ))}
             {(slide.itens || []).length < 6 && (

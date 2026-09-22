@@ -37,15 +37,15 @@ function Previa({ modelo, slides, aberto, aoFechar, aoUsar, aoRemover }) {
             <h2>{modelo.nome}</h2>
             <p className="dica">Slide {i + 1} de {slides.length}</p>
           </div>
-          <button type="button" className="btn btn-icone" onClick={aoFechar} aria-label="Fechar"><X size={18} /></button>
+          <button type="button" className="btn btn-icone" onClick={aoFechar} title="Fechar" aria-label="Fechar"><X size={18} /></button>
         </div>
 
         <div className="modal-grade">
           <div>
             <div className="moldura" style={{ position: "relative" }}>
               <SlideView modelo={modelo} slide={atual} />
-              <button type="button" className="navegar" style={{ left: 12 }} onClick={() => setI((v) => (v - 1 + slides.length) % slides.length)} aria-label="Slide anterior"><ChevronLeft size={20} /></button>
-              <button type="button" className="navegar" style={{ right: 12 }} onClick={() => setI((v) => (v + 1) % slides.length)} aria-label="Próximo slide"><ChevronRight size={20} /></button>
+              <button type="button" className="navegar" style={{ left: 12 }} onClick={() => setI((v) => (v - 1 + slides.length) % slides.length)} title="Slide anterior" aria-label="Slide anterior"><ChevronLeft size={20} /></button>
+              <button type="button" className="navegar" style={{ right: 12 }} onClick={() => setI((v) => (v + 1) % slides.length)} title="Próximo slide" aria-label="Próximo slide"><ChevronRight size={20} /></button>
             </div>
             <div className="tiras">
               {slides.map((s, k) => (

@@ -115,7 +115,8 @@ test/                    testes do núcleo e de ponta a ponta
 ## Formatação, fundo e marca d'água
 
 Cada campo do editor tem uma barra própria: aumentar e diminuir a fonte, negrito,
-itálico, alinhamento e cor, com um botão para voltar ao padrão do modelo. Os ajustes
+itálico, alinhamento e cor, com um botão para voltar ao padrão do modelo. Todo botão
+de ícone mostra o nome da ação ao passar o mouse. Os ajustes
 ficam no slide (`slide.estilo`), não no modelo, então sobrevivem à troca de design.
 
 O plano de fundo (cor, gradiente ou imagem, com controle de escurecimento) e a marca

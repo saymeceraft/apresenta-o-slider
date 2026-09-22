@@ -96,7 +96,7 @@ export default function PainelVisual({ fundo, marca, modelo, slide, aoMudarFundo
 
       {aberto && (
         <div className="grade-visual">
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="grupo-visual">
             <div className="rotulo-campo" style={{ margin: 0 }}>Plano de fundo</div>
             <div className="opcoes">
               {[["modelo", "Do modelo"], ["cor", "Cor"], ["gradiente", "Gradiente"], ["imagem", "Imagem"]].map(([v, nome]) => (
@@ -143,7 +143,7 @@ export default function PainelVisual({ fundo, marca, modelo, slide, aoMudarFundo
             )}
           </div>
 
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="grupo-visual">
             <div className="rotulo-campo" style={{ margin: 0 }}>Marca d'água</div>
             <input ref={arqMarca} type="file" accept="image/*" style={{ display: "none" }}
               onChange={(e) => { carregar(e.target.files?.[0], "marca"); e.target.value = ""; }} />

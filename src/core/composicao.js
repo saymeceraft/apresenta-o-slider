@@ -40,7 +40,9 @@ export function comporModelo(modelo, deck) {
     t.muted = hexA(texto, 0.75);
     t.surface = hexA(texto, 0.14);
     t.hairline = hexA(texto, 0.28);
-    if (claro === (lum(t.accent) ?? 0) > 0.55) t.accent = t.accent; // mantém a cor da marca do modelo
+    // Se a cor de destaque do modelo sumir no fundo novo, usa a cor do texto.
+    const contraste = Math.abs((lum(t.accent) ?? 0.5) - (lum(t.bg) ?? 0.5));
+    if (fundo.tipo !== "imagem" && contraste < 0.22) t.accent = texto;
   }
 
   t.marca = marca.ativa && (marca.tipo === "imagem" ? marca.imagem : marca.texto.trim()) ? marca : null;

@@ -147,9 +147,13 @@ function quebrarLongo(s) {
   return partes.map((corpo, i) => ({ ...s, corpo, titulo: i === 0 ? s.titulo : "" }));
 }
 
-const juntaveis = (a, b) =>
-  a.tipo === "texto" && b.tipo === "texto" && !b.titulo &&
-  (a.corpo.length + b.corpo.length) < 560;
+const textoSimples = (s) => s.tipo === "texto";
+
+/** Junta dois slides de texto em um só, preservando os dois títulos. */
+function juntar(a, b) {
+  const partes = [a.corpo, b.titulo ? `${b.titulo}: ${b.corpo}` : b.corpo].filter(Boolean);
+  return { ...a, corpo: partes.join("\n") };
+}
 
 /** Aproxima o número de slides do pedido. Nunca apaga conteúdo: se não der
  *  para juntar mais, devolve mais slides do que o alvo. */
@@ -158,40 +162,34 @@ export function ajustarQuantidade(slides, alvo) {
   const n = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(alvo) || 0));
   let out = [...slides];
 
-  // Sobrando: junta parágrafos vizinhos; depois corta o encerramento extra.
-  let volta = 0;
-  while (out.length > n && volta < 60) {
-    volta++;
-    let mudou = false;
-    for (let i = 0; i < out.length - 1; i++) {
-      if (juntaveis(out[i], out[i + 1])) {
-        out[i] = { ...out[i], corpo: `${out[i].corpo}\n${out[i + 1].corpo}` };
-        out.splice(i + 1, 1);
-        mudou = true;
-        break;
-      }
+  // Sobrando: junta textos vizinhos, primeiro os curtos, depois qualquer par.
+  for (const limite of [560, 900, 1400, Infinity]) {
+    while (out.length > n) {
+      let i = out.findIndex((s, k) =>
+        k < out.length - 1 && textoSimples(s) && textoSimples(out[k + 1]) &&
+        (s.corpo.length + out[k + 1].corpo.length) < limite);
+      if (i < 0) break;
+      out.splice(i, 2, juntar(out[i], out[i + 1]));
     }
-    if (!mudou) break;
+    if (out.length <= n) break;
   }
-  // Se ainda sobrar, o conteúdo é o que manda: preferimos entregar mais
-  // slides do que o pedido a apagar informação do usuário.
 
   // Faltando: quebra os textos maiores em dois.
-  volta = 0;
+  let volta = 0;
   while (out.length < n && volta < 60) {
     volta++;
     let idx = -1, maior = 0;
     out.forEach((s, i) => {
       const tam = s.tipo === "texto" ? (s.corpo || "").length : 0;
-      if (tam > maior && tam > 240) { maior = tam; idx = i; }
+      if (tam > maior && tam > 200) { maior = tam; idx = i; }
     });
     if (idx < 0) break;
     const fs = frases(out[idx].corpo);
     if (fs.length < 2) break;
     const meio = Math.ceil(fs.length / 2);
-    const a = { ...out[idx], corpo: fs.slice(0, meio).join(" ") };
-    const b = { ...out[idx], titulo: "", corpo: fs.slice(meio).join(" ") };
-    out.splice(idx, 1, a, b);
+    out.splice(idx, 1,
+      { ...out[idx], corpo: fs.slice(0, meio).join(" ") },
+      { ...out[idx], titulo: "", corpo: fs.slice(meio).join(" ") });
   }
   return out;
 }

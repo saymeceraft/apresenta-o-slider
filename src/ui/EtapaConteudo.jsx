@@ -93,18 +93,11 @@ export default function EtapaConteudo({
         </div>
       </section>
 
+      {iaOk !== false && (
       <section className="secao">
         <div className="secao-cabecalho">
           <h2>Gerar com IA <span className="etiqueta">opcional</span></h2>
         </div>
-        {iaOk === false ? (
-          <div className="cartao-claro">
-            <p className="dica" style={{ margin: 0 }}>
-              A geração com IA não está configurada neste ambiente. Você ainda pode criar,
-              editar e exportar a apresentação normalmente escrevendo o conteúdo acima.
-            </p>
-          </div>
-        ) : (
           <div className="cartao">
             <div className="grade-campos">
               <div>
@@ -151,9 +144,9 @@ export default function EtapaConteudo({
               </span>
             </div>
           </div>
-        )}
-        {aviso && <p className="erro">{aviso}</p>}
       </section>
+      )}
+      {aviso && <p className="erro">{aviso}</p>}
     </>
   );
 }

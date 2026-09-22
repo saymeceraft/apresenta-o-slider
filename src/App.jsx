@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Copy, Download, FileText, Globe, Loader2,
-  Palette, Play, Presentation, Printer, RefreshCw,
+  Palette, Play, Presentation, Printer, RefreshCw, Undo2,
 } from "lucide-react";
 
 import Passos from "./ui/Passos.jsx";
@@ -59,6 +59,7 @@ export default function App() {
   const [recado, setRecado] = useState("");
   const [iaOk, setIaOk] = useState(null);
   const [apresentando, setApresentando] = useState(false);
+  const [desfazer, setDesfazer] = useState(null);
   const [carregado, setCarregado] = useState(false);
 
   /* ---------- carregar o que estava salvo ---------- */
@@ -71,7 +72,15 @@ export default function App() {
         storageService.get(CHAVES.config),
       ]);
       if (Array.isArray(imp)) setImportados(imp);
-      if (cfg && typeof cfg === "object") setConfig({ ...CONFIG_PADRAO, ...cfg });
+      if (cfg && typeof cfg === "object") {
+        const { etapa: salva, texto: textoSalvo, ...resto } = cfg;
+        setConfig({ ...CONFIG_PADRAO, ...resto });
+        if (typeof textoSalvo === "string") setTexto(textoSalvo);
+        if (d?.slides?.length && Number.isInteger(salva)) {
+          // Volta exatamente para onde a pessoa parou.
+          setEtapa(Math.min(salva, m ? 5 : 3));
+        }
+      }
       if (d?.slides?.length) {
         setDeck(d);
         setProprio(true);
@@ -90,7 +99,9 @@ export default function App() {
   }, [carregado, proprio]);
   const estadoSalvo = useAutosave(deck, salvarDeck);
 
-  useEffect(() => { if (carregado) storageService.set(CHAVES.config, config); }, [config, carregado]);
+  useEffect(() => {
+    if (carregado) storageService.set(CHAVES.config, { ...config, etapa, texto });
+  }, [config, etapa, texto, carregado]);
   useEffect(() => { if (carregado && modeloId) storageService.set(CHAVES.modelo, modeloId); }, [modeloId, carregado]);
 
   /* ---------- dados derivados ---------- */
@@ -159,11 +170,32 @@ export default function App() {
     arr.splice(i + 1, 0, duplicarSlide(slides[i]));
     atualizarDeck(arr);
   };
-  const excluir = (i) => { if (slides.length > 1) atualizarDeck(slides.filter((_, k) => k !== i)); };
+  const excluir = (i) => {
+    if (slides.length <= 1) return;
+    setDesfazer({ slide: slides[i], indice: i });
+    atualizarDeck(slides.filter((_, k) => k !== i));
+    setRecado(`Slide ${i + 1} excluído.`);
+    setTimeout(() => { setDesfazer(null); setRecado((r) => (r.startsWith("Slide ") ? "" : r)); }, 9000);
+  };
+  const restaurar = () => {
+    if (!desfazer) return;
+    const arr = [...slides];
+    arr.splice(Math.min(desfazer.indice, arr.length), 0, desfazer.slide);
+    atualizarDeck(arr);
+    setDesfazer(null);
+    flash("Slide restaurado.");
+  };
   const adicionar = (tipo) => atualizarDeck([...slides, novoSlide(tipo)]);
   const reaplicarQuantidade = (q) => {
     setConfig({ ...config, quantidade: q });
-    atualizarDeck(ajustarQuantidade(slides, q));
+    const novos = ajustarQuantidade(slides, q);
+    atualizarDeck(novos);
+    const alvo = Number(q);
+    if (alvo && novos.length !== alvo) {
+      flash(novos.length > alvo
+        ? `O conteúdo não coube em ${alvo} slides: ficaram ${novos.length}.`
+        : `Não havia texto suficiente para ${alvo} slides: ficaram ${novos.length}.`);
+    }
   };
 
   /* ---------- etapa 3: design ---------- */
@@ -206,16 +238,18 @@ export default function App() {
   };
 
   /* ---------- etapa 5: exportar ---------- */
-  const exportarPowerPoint = () => {
+  const exportarPowerPoint = async () => {
     if (!modelo) return;
     setExportando("pptx");
+    setRecado("Gerando o arquivo do PowerPoint…");
+    await new Promise((r) => setTimeout(r, 30));
     try {
       baixar(
         nomeArquivo(deck, modelo, "pptx"),
         construirPptx(modeloComposto, slides),
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
       );
-      flash("PowerPoint baixado.");
+      flash(`Baixado: ${nomeArquivo(deck, modelo, "pptx")}`);
     } catch (e) {
       console.error(e);
       flash("Não foi possível exportar o PowerPoint.");
@@ -227,10 +261,11 @@ export default function App() {
   const exportarComoPdf = async () => {
     if (!modelo) return;
     setExportando("pdf");
+    setRecado("Gerando o PDF…");
     try {
       await exportarPdf(modeloComposto, slides, nomeArquivo(deck, modelo, "pdf"),
         (i, total) => setExportando(`pdf:${i}/${total}`));
-      flash("PDF baixado.");
+      flash(`Baixado: ${nomeArquivo(deck, modelo, "pdf")}`);
     } catch (e) {
       console.error(e);
       flash("Não foi possível gerar o PDF. Você pode usar Imprimir como alternativa.");
@@ -289,7 +324,7 @@ export default function App() {
           gerando={gerando}
           iaOk={iaOk}
           aviso={aviso}
-          temDeck={proprio}
+          temDeck={proprio && etapa === 1 && !texto.trim()}
           aoAvancar={() => irPara(modeloId ? 5 : 2)}
         />
       )}
@@ -465,6 +500,11 @@ export default function App() {
         {etapa === 5 && modelo && (
           <button type="button" className="btn btn-pequeno" onClick={() => setApresentando(true)}>
             <Play size={15} /> Apresentar
+          </button>
+        )}
+        {desfazer && (
+          <button type="button" className="btn btn-pequeno btn-escuro" onClick={restaurar}>
+            <Undo2 size={15} /> Desfazer
           </button>
         )}
       </div>

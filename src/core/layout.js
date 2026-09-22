@@ -9,10 +9,29 @@ import { fundoShapes, marcaShapes } from "./composicao.js";
 export const W = 960, H = 540, P = 72, PT = 64;
 
 const pesoFator = (w) => (w >= 800 ? 1.09 : w >= 700 ? 1.06 : w >= 600 ? 1.03 : w <= 300 ? 0.96 : 1);
-/* A margem de 6% cobre a diferença quando a fonte real não está disponível
-   e o sistema substitui por outra um pouco mais larga. */
-const larguraTexto = (txt, size, fonte, upper, track, peso) =>
-  txt.length * size * (CW(fonte) * pesoFator(peso || 400) + (track || 0)) * (upper ? 1.14 : 1) * 1.06;
+
+/* Largura de cada letra em fração do corpo da fonte. A média não serve:
+   "mmmm" ocupa quase o dobro de "iiii" e o título acabava invadindo o
+   subtítulo. Os valores são de uma grotesca comum (Inter) e as outras
+   famílias entram como um multiplicador. */
+const ESTREITAS = "iljtfIJ.,:;'`|!()[]{}/\\-";
+const LARGAS = "mwMW@%&";
+const larguraLetra = (c) => {
+  if (c === " ") return 0.26;
+  if (ESTREITAS.includes(c)) return 0.30;
+  if (LARGAS.includes(c)) return 0.86;
+  if (c >= "0" && c <= "9") return 0.57;
+  if (c >= "A" && c <= "Z") return 0.66;
+  return 0.52;
+};
+
+const larguraTexto = (txt, size, fonte, upper, track, peso) => {
+  const familia = CW(fonte) / 0.50;            // condensada encolhe, larga estica
+  const alta = upper ? 1.14 : 1;
+  let soma = 0;
+  for (const c of String(txt)) soma += larguraLetra(upper ? c.toUpperCase() : c);
+  return (soma * familia * pesoFator(peso || 400) * alta + String(txt).length * (track || 0)) * size * 1.04;
+};
 
 /** Conta as linhas quebrando por palavra, como o navegador faz. */
 function contarLinhas(linha, w, size, fonte, upper, track, peso) {

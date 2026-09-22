@@ -14,6 +14,31 @@ export const novoSlide = (tipo) => {
   return b;
 };
 
+/** Troca o tipo do slide aproveitando o que já estava escrito. */
+export function converterSlide(slide, tipo) {
+  if (slide.tipo === tipo) return slide;
+  const base = novoSlide(tipo);
+  const itens = slide.itens || [];
+  const textoLivre = [slide.corpo, itens.join("\n"), slide.legenda].filter(Boolean).join("\n");
+
+  const out = { ...base, tipo, titulo: slide.titulo || "", subtitulo: slide.subtitulo || "" };
+  if (tipo === "topicos") {
+    out.itens = (textoLivre ? textoLivre.split("\n") : []).map((x) => x.trim()).filter(Boolean).slice(0, 6);
+    if (!out.itens.length) out.itens = ["", ""];
+  } else if (tipo === "texto" || tipo === "citacao") {
+    out.corpo = textoLivre || slide.subtitulo || "";
+    if (tipo === "citacao") out.autor = slide.autor || "";
+  } else if (tipo === "destaque") {
+    out.numero = slide.numero || "";
+    out.legenda = slide.legenda || textoLivre.split("\n")[0] || "";
+  } else if (tipo === "capa" || tipo === "fim") {
+    out.subtitulo = slide.subtitulo || textoLivre.split("\n")[0] || "";
+  }
+  if (slide.estilo) out.estilo = slide.estilo;
+  if (slide.semMarca) out.semMarca = true;
+  return out;
+}
+
 /** Cópia profunda de um slide, sem compartilhar arrays. */
 export const duplicarSlide = (s) => ({ ...s, itens: [...(s.itens || [])] });
 

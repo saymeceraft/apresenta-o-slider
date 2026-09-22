@@ -198,12 +198,12 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes("Outras opções"), { timeout: 8000 });
   await clicarTexto(page, ".btn-principal", "PowerPoint");
   await page.waitForFunction(
-    () => document.body.innerText.includes("PowerPoint baixado") || document.body.innerText.includes("Não foi possível exportar"),
+    () => /Baixado: .+\.pptx/.test(document.body.innerText) || document.body.innerText.includes("Não foi possível exportar"),
     { timeout: 20000 }
   );
   await clicarTexto(page, ".btn-escuro", "PDF");
   await page.waitForFunction(
-    () => document.body.innerText.includes("PDF baixado") || document.body.innerText.includes("Não foi possível gerar"),
+    () => /Baixado: .+\.pdf/.test(document.body.innerText) || document.body.innerText.includes("Não foi possível gerar"),
     { timeout: 120000 }
   );
   await espera(1500);
@@ -233,6 +233,47 @@ try {
   });
   if (!recuperou) erros.push("a apresentação não foi recuperada após recarregar");
   else passos.push("apresentação recuperada após recarregar");
+
+  const voltouNaEtapa = await page.evaluate(() => document.body.innerText.includes("Exportar") && !!document.querySelector(".barra"));
+  const etapaAtual = await page.$eval('.passo[aria-current="step"]', (n) => n.textContent.trim());
+  if (etapaAtual.startsWith("1")) erros.push("após recarregar voltou para a etapa 1 em vez de onde estava");
+  else passos.push(`voltou direto para a etapa ${etapaAtual}`);
+
+  // Desfazer exclusão
+  await page.$$eval(".passo", (ns) => { const b = ns.find((n) => n.textContent.includes("Revisão")); if (b) b.click(); });
+  await espera(600);
+  const antesEx = await page.$$eval(".editor-slide", (n) => n.length);
+  await page.click('.editor-slide button[aria-label="Excluir slide"]');
+  await espera(300);
+  await page.$$eval(".barra button", (ns) => { const b = ns.find((n) => n.textContent.includes("Desfazer")); if (b) b.click(); });
+  await espera(400);
+  const depoisEx = await page.$$eval(".editor-slide", (n) => n.length);
+  if (depoisEx !== antesEx) erros.push(`desfazer exclusão não restaurou o slide (${antesEx} -> ${depoisEx})`);
+  else passos.push("excluir e desfazer funcionam");
+
+  // Trocar o tipo preservando o texto
+  const tipoOk = await page.evaluate(async () => {
+    const cartoes = [...document.querySelectorAll(".editor-slide")];
+    const k = cartoes.findIndex((n) => n.querySelector("select").value === "topicos");
+    if (k < 0) return "sem slide de tópicos";
+    const itens = [...cartoes[k].querySelectorAll("input.campo")].map((n) => n.value).filter(Boolean);
+    const sel = cartoes[k].querySelector("select");
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+    setter.call(sel, "texto");
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 500));
+    const area = document.querySelectorAll(".editor-slide")[k].querySelector("textarea");
+    if (!itens.length) return "slide de tópicos sem itens";
+    return area && itens.some((i) => area.value.includes(i)) ? "ok" : `texto perdido ao trocar o tipo (itens: ${itens.join("|")}, corpo: ${area ? area.value.slice(0, 40) : "sem textarea"})`;
+  });
+  if (tipoOk === "ok") passos.push("trocar o tipo preserva o texto");
+  else if (tipoOk !== "sem slide de tópicos") erros.push(tipoOk);
+
+  // Tooltips nos botões de ícone
+  const semDica = await page.$$eval(".editor-slide button, .fmt", (ns) =>
+    ns.filter((n) => !n.textContent.trim() && !n.getAttribute("title")).length);
+  if (semDica) erros.push(`${semDica} botões de ícone sem dica ao passar o mouse`);
+  else passos.push("todos os botões de ícone têm dica");
 
   // IA sem chave: o app segue funcionando
   const semIA = await page.evaluate(() => document.body.innerText.includes("não está configurada") || true);
