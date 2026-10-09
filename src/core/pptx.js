@@ -1,6 +1,7 @@
 import { FP } from "./fontes.js";
 import { hex6 } from "./cores.js";
 import { layout, alturaTexto } from "./layout.js";
+import { comporModelo } from "./composicao.js";
 import { esc } from "./renderHtml.js";
 
 const enc = new TextEncoder();
@@ -87,7 +88,10 @@ const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
 function fillXml(sh) {
   if (sh.grad) {
     const gs = sh.grad.map((c, i) => `<a:gs pos="${Math.round((i / Math.max(sh.grad.length - 1, 1)) * 100000)}"><a:srgbClr val="${hex6(c)}"/></a:gs>`).join("");
-    return `<a:gradFill rotWithShape="1"><a:gsLst>${gs}</a:gsLst><a:lin ang="0" scaled="0"/></a:gradFill>`;
+    // O CSS mede o ângulo a partir do topo e no sentido horário; o OOXML, a
+    // partir da direita. Daí o -90 antes de converter para 1/60000 de grau.
+    const ang = Math.round((((Number(sh.angulo ?? 90) - 90) % 360) + 360) % 360 * 60000);
+    return `<a:gradFill rotWithShape="1"><a:gsLst>${gs}</a:gsLst><a:lin ang="${ang}" scaled="0"/></a:gradFill>`;
   }
   if (!sh.fill) return "<a:noFill/>";
   const al = sh.opacity != null && sh.opacity < 1 ? `<a:alpha val="${Math.round(sh.opacity * 100000)}"/>` : "";
@@ -105,7 +109,10 @@ function spXml(sh, id, rels) {
       + `<p:blipFill><a:blip r:embed="${rid}">${alpha}</a:blip>`
       + `<a:stretch><a:fillRect/></a:stretch></p:blipFill>`
       + `<p:spPr><a:xfrm${rot}><a:off x="${emu(sh.x)}" y="${emu(sh.y)}"/><a:ext cx="${emu(sh.w)}" cy="${emu(sh.h)}"/></a:xfrm>`
-      + `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+      + (sh.radius
+        ? `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${Math.min(50000, Math.round((sh.radius / Math.min(sh.w, sh.h)) * 100000))}"/></a:avLst></a:prstGeom>`
+        : `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>`)
+      + `</p:spPr></p:pic>`;
   }
   if (sh.k === "rect" || sh.k === "ellipse") {
     const geo = sh.k === "ellipse" ? '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>'
@@ -140,7 +147,7 @@ function spXml(sh, id, rels) {
 function slideXml(t, s, rels) {
   const shapes = layout(t, s).map((sh, i) => spXml(sh, i + 2, rels)).join("");
   const bg = t.bgGrad
-    ? fillXml({ grad: t.bgGrad })
+    ? fillXml({ grad: t.bgGrad, angulo: t.bgAngulo ?? 135 })
     : `<a:solidFill><a:srgbClr val="${hex6(t.bg, "FFFFFF")}"/></a:solidFill>`;
   return XML + `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">`
     + `<p:cSld><p:bg><p:bgPr>${bg}<a:effectLst/></p:bgPr></p:bg>`
@@ -169,7 +176,10 @@ const MASTER = XML + `<p:sldMaster ${NS}><p:cSld><p:bg><p:bgPr><a:solidFill><a:s
 const LAYOUT = XML + `<p:sldLayout ${NS} type="blank" preserve="1"><p:cSld name="Em branco">${VAZIO_TREE}</p:cSld>`
   + `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`;
 
-export function construirPptx(t, slides) {
+export function construirPptx(modelo, slides, deck) {
+  // Cada slide pode ter o seu próprio fundo; o modelo é recomposto por slide.
+  const mod = (s) => (deck ? comporModelo(modelo, deck, s) : modelo);
+  const t = modelo;
   const n = slides.length;
   const arquivos = [];
 
@@ -177,7 +187,7 @@ export function construirPptx(t, slides) {
   const midia = new Map(); // dataURL -> { nome, ext }
   const porSlide = slides.map((s) => {
     const usadas = [];
-    for (const sh of layout(t, s)) {
+    for (const sh of layout(mod(s), s)) {
       if (sh.k !== "img" || !sh.src) continue;
       if (!midia.has(sh.src)) {
         const dados = bytesDeDataUrl(sh.src);
@@ -233,7 +243,7 @@ export function construirPptx(t, slides) {
 
   slides.forEach((s, i) => {
     const { usadas, rels } = porSlide[i];
-    arquivos.push({ name: `ppt/slides/slide${i + 1}.xml`, data: slideXml(t, s, rels) });
+    arquivos.push({ name: `ppt/slides/slide${i + 1}.xml`, data: slideXml(mod(s), s, rels) });
     const relsImg = usadas
       .filter((src) => midia.has(src))
       .map((src, k) => `<Relationship Id="rId${k + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${midia.get(src).nome}"/>`)

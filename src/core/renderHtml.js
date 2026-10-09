@@ -1,6 +1,7 @@
 import { F, FONTS_LINK } from "./fontes.js";
 import { hexA } from "./cores.js";
 import { layout, W, H } from "./layout.js";
+import { comporModelo } from "./composicao.js";
 
 export const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -9,8 +10,9 @@ function shapeHtml(sh) {
   const rot = sh.rot ? `transform:rotate(${sh.rot}deg);` : "";
   if (sh.k === "img") {
     const op = sh.opacity != null ? `opacity:${sh.opacity};` : "";
+    const r = sh.radius ? `border-radius:${sh.radius}px;` : "";
     return `<img src="${esc(sh.src)}" alt="" style="${base}width:${sh.w}px;height:${sh.h}px;`
-      + `object-fit:${sh.ajuste || "cover"};${op}${rot}" />`;
+      + `object-fit:${sh.ajuste || "cover"};${r}${op}${rot}" />`;
   }
   if (sh.k === "rect" || sh.k === "ellipse") {
     // Formas "soft" usam degradê radial em vez de filter:blur — o resultado é
@@ -35,15 +37,17 @@ function shapeHtml(sh) {
 }
 
 export function slideHtml(t, s) {
-  const bg = t.bgGrad ? `linear-gradient(135deg,${t.bgGrad.join(",")})` : t.bg;
+  const bg = t.bgGrad ? `linear-gradient(${t.bgAngulo ?? 135}deg,${t.bgGrad.join(",")})` : t.bg;
   return `<div style="position:absolute;inset:0;background:${bg};overflow:hidden">`
     + layout(t, s).map(shapeHtml).join("") + `</div>`;
 }
 
 
 
-export function documentoImpressao(t, slides, titulo) {
-  const paginas = slides.map((s) => `<div class="pg"><div class="sl">${slideHtml(t, s)}</div></div>`).join("");
+export function documentoImpressao(t, slides, titulo, deck) {
+  const paginas = slides
+    .map((s) => `<div class="pg"><div class="sl">${slideHtml(deck ? comporModelo(t, deck, s) : t, s)}</div></div>`)
+    .join("");
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo || "Apresentação")}</title>
 <link rel="stylesheet" href="${FONTS_LINK}">
 <style>

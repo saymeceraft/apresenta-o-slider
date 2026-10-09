@@ -1,10 +1,24 @@
-import { sobre, hexA, lum } from "./cores.js";
+import { sobre, misturar, lum } from "./cores.js";
 
 /* O modelo continua sendo o dono do visual. Aqui só sobrepomos duas
    escolhas do usuário que valem para a apresentação inteira:
    o plano de fundo e a marca d'água. O deck (conteúdo) não é tocado. */
 
-export const FUNDO_PADRAO = { tipo: "modelo", cor: "#0b1020", cor2: "#4f2bff", imagem: null, escurecer: 0.35 };
+export const FUNDO_PADRAO = {
+  tipo: "modelo",                       // modelo | cor | gradiente | imagem
+  cor: "#0b1020",
+  paradas: ["#0b1020", "#2b3bd6", "#4f2bff"],  // gradiente com quantas cores quiser
+  angulo: 135,
+  imagem: null,
+  escurecer: 0.35,
+};
+
+/** Fundo em vigor para um slide: o dele, se tiver, senão o da apresentação. */
+export const fundoDoSlide = (deck, slide) => ({
+  ...FUNDO_PADRAO,
+  ...(deck?.fundo || {}),
+  ...(slide?.fundo || {}),
+});
 export const MARCA_PADRAO = {
   ativa: false, tipo: "texto", texto: "", imagem: null,
   posicao: "inferior-direita", x: null, y: null,
@@ -20,26 +34,32 @@ export const POSICOES = [
 ];
 
 /** Devolve o modelo com o fundo e a marca do deck já aplicados. */
-export function comporModelo(modelo, deck) {
+export function comporModelo(modelo, deck, slide) {
   if (!modelo) return modelo;
-  const fundo = { ...FUNDO_PADRAO, ...(deck?.fundo || {}) };
+  const fundo = fundoDoSlide(deck, slide);
   const marca = { ...MARCA_PADRAO, ...(deck?.marca || {}) };
   let t = { ...modelo };
 
   if (fundo.tipo === "cor" || fundo.tipo === "gradiente" || fundo.tipo === "imagem") {
+    const paradas = (fundo.paradas || []).filter(Boolean);
+    const primeira = fundo.tipo === "gradiente" ? (paradas[0] || fundo.cor) : fundo.cor;
     const claro = fundo.tipo === "imagem"
       ? fundo.escurecer < 0.25
-      : (lum(fundo.tipo === "gradiente" ? fundo.cor : fundo.cor) ?? 0) > 0.55;
+      : (lum(primeira) ?? 0) > 0.55;
     const texto = claro ? "#111111" : "#ffffff";
 
-    t.bg = fundo.tipo === "gradiente" ? fundo.cor : fundo.cor;
-    t.bgGrad = fundo.tipo === "gradiente" ? [fundo.cor, fundo.cor2] : null;
+    t.bg = primeira;
+    t.bgGrad = fundo.tipo === "gradiente" && paradas.length > 1 ? paradas : null;
+    t.bgAngulo = Number(fundo.angulo);
     t.bgImagem = fundo.tipo === "imagem" ? fundo.imagem : null;
     t.escurecer = fundo.tipo === "imagem" ? Number(fundo.escurecer) || 0 : 0;
+    // Mistura em vez de transparência: o PowerPoint não tem alfa em
+    // preenchimento de forma e transformaria rgba() em preto.
+    const baseMistura = fundo.tipo === "imagem" ? (claro ? "#ffffff" : "#1a1a1a") : primeira;
     t.fg = texto;
-    t.muted = hexA(texto, 0.75);
-    t.surface = hexA(texto, 0.14);
-    t.hairline = hexA(texto, 0.28);
+    t.muted = misturar(texto, baseMistura, 0.75);
+    t.surface = misturar(texto, baseMistura, 0.14);
+    t.hairline = misturar(texto, baseMistura, 0.28);
     // Se a cor de destaque do modelo sumir no fundo novo, usa a cor do texto.
     const contraste = Math.abs((lum(t.accent) ?? 0.5) - (lum(t.bg) ?? 0.5));
     if (fundo.tipo !== "imagem" && contraste < 0.22) t.accent = texto;

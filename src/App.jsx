@@ -4,9 +4,9 @@ import {
   Palette, Play, Presentation, Printer, RefreshCw, Undo2,
 } from "lucide-react";
 
-import Passos from "./ui/Passos.jsx";
+import Abas from "./ui/Abas.jsx";
 import EtapaConteudo from "./ui/EtapaConteudo.jsx";
-import EditorSlides from "./ui/EditorSlides.jsx";
+import Editor from "./ui/Editor.jsx";
 import Galeria from "./ui/Galeria.jsx";
 import Apresentar from "./ui/Apresentar.jsx";
 import PainelVisual from "./ui/PainelVisual.jsx";
@@ -60,6 +60,10 @@ export default function App() {
   const [iaOk, setIaOk] = useState(null);
   const [apresentando, setApresentando] = useState(false);
   const [desfazer, setDesfazer] = useState(null);
+  const [selecionado, setSelecionado] = useState(0);
+  // Histórico do deck: pilhas de estados anteriores e posteriores.
+  const [passado, setPassado] = useState([]);
+  const [futuro, setFuturo] = useState([]);
   const [carregado, setCarregado] = useState(false);
 
   /* ---------- carregar o que estava salvo ---------- */
@@ -78,13 +82,13 @@ export default function App() {
         if (typeof textoSalvo === "string") setTexto(textoSalvo);
         if (d?.slides?.length && Number.isInteger(salva)) {
           // Volta exatamente para onde a pessoa parou.
-          setEtapa(Math.min(salva, m ? 5 : 3));
+          setEtapa(Math.min(salva, m ? 4 : 2));
         }
       }
       if (d?.slides?.length) {
         setDeck(d);
         setProprio(true);
-        setMaximo(m ? 5 : 3);
+        setMaximo(m ? 4 : 2);
       }
       if (typeof m === "string") setModeloId(m);
       setCarregado(true);
@@ -116,12 +120,41 @@ export default function App() {
   const modeloPreview = useMemo(() => comporModelo(base, deck), [base, deck]);
   const modelosCompostos = useMemo(() => modelos.map((t) => comporModelo(t, deck)), [modelos, deck]);
   const slides = deck.slides;
+  const indiceAtual = Math.min(selecionado, slides.length - 1);
 
   const flash = (m) => { setRecado(m); setTimeout(() => setRecado(""), 3200); };
   const irPara = (n) => { setEtapa(n); setMaximo((v) => Math.max(v, n)); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const atualizarDeck = (novos) => setDeck((d) => ({ ...d, slides: novos }));
-  const mudarFundo = (fundo) => { setDeck((d) => ({ ...d, fundo })); setProprio(true); };
-  const mudarMarca = (marca) => { setDeck((d) => ({ ...d, marca })); setProprio(true); };
+  /** Toda mudança no deck passa por aqui, para alimentar desfazer e refazer. */
+  const comHistorico = (muda) => {
+    setDeck((d) => {
+      const novo = muda(d);
+      if (novo === d) return d;
+      setPassado((p) => [...p.slice(-39), d]);
+      setFuturo([]);
+      return novo;
+    });
+    setProprio(true);
+  };
+  const atualizarDeck = (novos) => comHistorico((d) => ({ ...d, slides: novos }));
+  const mudarFundo = (fundo) => comHistorico((d) => ({ ...d, fundo }));
+  const mudarMarca = (marca) => comHistorico((d) => ({ ...d, marca }));
+
+  const desfazerTudo = () => {
+    setPassado((p) => {
+      if (!p.length) return p;
+      setFuturo((f) => [deck, ...f].slice(0, 40));
+      setDeck(p[p.length - 1]);
+      return p.slice(0, -1);
+    });
+  };
+  const refazerTudo = () => {
+    setFuturo((f) => {
+      if (!f.length) return f;
+      setPassado((p) => [...p, deck]);
+      setDeck(f[0]);
+      return f.slice(1);
+    });
+  };
 
   /* ---------- etapa 1: conteúdo ---------- */
   const montar = () => {
@@ -185,7 +218,13 @@ export default function App() {
     setDesfazer(null);
     flash("Slide restaurado.");
   };
-  const adicionar = (tipo) => atualizarDeck([...slides, novoSlide(tipo)]);
+  const adicionar = (tipo, posicao) => {
+    const arr = [...slides];
+    const onde = Number.isInteger(posicao) ? posicao : arr.length;
+    arr.splice(onde, 0, novoSlide(tipo));
+    atualizarDeck(arr);
+    setSelecionado(onde);
+  };
   const reaplicarQuantidade = (q) => {
     setConfig({ ...config, quantidade: q });
     const novos = ajustarQuantidade(slides, q);
@@ -201,7 +240,7 @@ export default function App() {
   /* ---------- etapa 3: design ---------- */
   const usarModelo = (id) => {
     setModeloId(id); // o deck não é tocado: conteúdo e design são separados
-    irPara(4);
+    irPara(3);
   };
 
   const importarModelos = async (arquivos) => {
@@ -246,7 +285,7 @@ export default function App() {
     try {
       baixar(
         nomeArquivo(deck, modelo, "pptx"),
-        construirPptx(modeloComposto, slides),
+        construirPptx(modeloComposto, slides, deck),
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
       );
       flash(`Baixado: ${nomeArquivo(deck, modelo, "pptx")}`);
@@ -264,7 +303,7 @@ export default function App() {
     setRecado("Gerando o PDF…");
     try {
       await exportarPdf(modeloComposto, slides, nomeArquivo(deck, modelo, "pdf"),
-        (i, total) => setExportando(`pdf:${i}/${total}`));
+        (i, total) => setExportando(`pdf:${i}/${total}`), deck);
       flash(`Baixado: ${nomeArquivo(deck, modelo, "pdf")}`);
     } catch (e) {
       console.error(e);
@@ -306,69 +345,47 @@ export default function App() {
         </div>
       </header>
 
-      <h1 className="titulo">Seu conteúdo. Seu design. Sua apresentação.</h1>
-      <p className="subtitulo">
-        Cole o texto, deixe o sistema organizar em slides, escolha o design e exporte em PowerPoint ou PDF.
-      </p>
-
-      <Passos atual={etapa} maximo={maximo} aoIr={irPara} />
+      <Abas atual={etapa} maximo={maximo} aoIr={irPara} />
 
       {etapa === 1 && (
-        <EtapaConteudo
-          texto={texto}
-          setTexto={setTexto}
-          config={config}
-          setConfig={setConfig}
-          aoMontar={montar}
-          aoGerarIA={gerarComIA}
-          gerando={gerando}
-          iaOk={iaOk}
-          aviso={aviso}
-          temDeck={proprio && etapa === 1 && !texto.trim()}
-          aoAvancar={() => irPara(modeloId ? 5 : 2)}
-        />
-      )}
-
-      {etapa === 2 && (
-        <section className="secao">
-          <div className="secao-cabecalho">
-            <h2>Estrutura ({slides.length} slides)</h2>
-            <div className="opcoes">
-              <span className="dica">Quantidade</span>
-              {["auto", 5, 8, 10, 15].map((q) => (
-                <button key={String(q)} type="button" className="opcao"
-                  aria-pressed={String(config.quantidade) === String(q)}
-                  onClick={() => reaplicarQuantidade(q)}>
-                  {q === "auto" ? "Automático" : q}
-                </button>
-              ))}
+        <div className="conteudo-etapa">
+          <h1 className="titulo">Seu conteúdo. Seu design. Sua apresentação.</h1>
+          <p className="subtitulo">
+            Cole o texto, deixe o sistema organizar em slides, escolha o design e exporte em PowerPoint ou PDF.
+          </p>
+          <EtapaConteudo
+            texto={texto}
+            setTexto={setTexto}
+            config={config}
+            setConfig={setConfig}
+            aoMontar={montar}
+            aoGerarIA={gerarComIA}
+            gerando={gerando}
+            iaOk={iaOk}
+            aviso={aviso}
+            temDeck={proprio && !texto.trim()}
+            aoAvancar={() => irPara(modeloId ? 3 : 2)}
+          />
+          <div className="opcoes" style={{ marginTop: 18 }}>
+            <span className="dica">Quantidade</span>
+            {["auto", 5, 8, 10, 15].map((q) => (
+              <button key={String(q)} type="button" className="opcao"
+                aria-pressed={String(config.quantidade) === String(q)}
+                onClick={() => (proprio ? reaplicarQuantidade(q) : setConfig({ ...config, quantidade: q }))}>
+                {q === "auto" ? "Automático" : q}
+              </button>
+            ))}
+            {proprio && (
               <button type="button" className="btn btn-pequeno btn-contorno" onClick={montar} disabled={!texto.trim()}>
                 <RefreshCw size={15} /> Reinterpretar texto
               </button>
-            </div>
+            )}
           </div>
-          <p className="dica" style={{ marginBottom: 14 }}>
-            Confira a ordem e o tipo de cada slide. Dá para ajustar tudo agora ou depois, na revisão.
-          </p>
-          <div style={{ marginBottom: 18 }}>
-            <PainelVisual fundo={deck.fundo} marca={deck.marca} modelo={modeloPreview} slide={slides[0]}
-              aoMudarFundo={mudarFundo} aoMudarMarca={mudarMarca} />
-          </div>
-          <EditorSlides
-            slides={slides}
-            modelo={modeloPreview}
-            temMarca={!!modeloPreview.marca}
-            aoMudar={mudarSlide}
-            aoMover={moverSlide}
-            aoDuplicar={duplicar}
-            aoExcluir={excluir}
-            aoAdicionar={adicionar}
-          />
-        </section>
+        </div>
       )}
 
-      {etapa === 3 && (
-        <section className="secao">
+      {etapa === 2 && (
+        <div className="conteudo-etapa">
           <Galeria
             modelos={modelosCompostos}
             slides={slides}
@@ -381,50 +398,42 @@ export default function App() {
             aviso={recado}
             aoRemover={removerModelo}
           />
-        </section>
+        </div>
       )}
 
-      {etapa === 4 && (
-        <section className="secao">
-          <div className="secao-cabecalho">
-            <h2>Revisar apresentação</h2>
-            <div className="opcoes">
-              <span className="dica">{modelo ? `Design: ${modelo.nome}` : "Nenhum design escolhido"}</span>
-              <button type="button" className="btn btn-pequeno btn-contorno" onClick={() => irPara(3)}>
-                <Palette size={15} /> Trocar modelo
-              </button>
-              {modelo && (
-                <button type="button" className="btn btn-pequeno btn-contorno" onClick={() => setApresentando(true)}>
-                  <Play size={15} /> Apresentar
-                </button>
-              )}
-            </div>
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <PainelVisual fundo={deck.fundo} marca={deck.marca} modelo={modeloPreview} slide={slides[0]}
-              aoMudarFundo={mudarFundo} aoMudarMarca={mudarMarca} />
-          </div>
-          <EditorSlides
-            slides={slides}
-            modelo={modeloPreview}
-            temMarca={!!modeloPreview.marca}
-            aoMudar={mudarSlide}
-            aoMover={moverSlide}
-            aoDuplicar={duplicar}
-            aoExcluir={excluir}
-            aoAdicionar={adicionar}
-          />
-        </section>
+      {etapa === 3 && (
+        <Editor
+          slides={slides}
+          indice={indiceAtual}
+          modelo={modeloPreview}
+          modeloBase={base}
+          deck={deck}
+          modelos={modelos}
+          aoSelecionar={setSelecionado}
+          aoMudarSlide={mudarSlide}
+          aoMover={moverSlide}
+          aoDuplicar={duplicar}
+          aoExcluir={excluir}
+          aoAdicionar={adicionar}
+          aoMudarFundo={mudarFundo}
+          aoMudarMarca={mudarMarca}
+          podeDesfazer={passado.length > 0}
+          podeRefazer={futuro.length > 0}
+          aoDesfazer={desfazerTudo}
+          aoRefazer={refazerTudo}
+          aoTrocarModelo={(id) => setModeloId(id)}
+          aoApresentar={() => setApresentando(true)}
+        />
       )}
 
-      {etapa === 5 && modelo && (
-        <section className="secao">
+      {etapa === 4 && modelo && (
+        <div className="conteudo-etapa">
           <div className="secao-cabecalho">
             <h2>Exportar</h2>
             <span className="dica">{modelo.nome} · {slides.length} slides · 16:9</span>
           </div>
           <div className="moldura" style={{ maxWidth: 760 }}>
-            <SlideView modelo={modeloComposto} slide={slides[0]} />
+            <SlideView modelo={modeloComposto} slide={slides[0]} deck={deck} />
           </div>
           <div className="opcoes" style={{ marginTop: 16 }}>
             <button type="button" className="btn btn-principal" onClick={exportarPowerPoint} disabled={!!exportando}>
@@ -438,30 +447,30 @@ export default function App() {
           <div className="opcoes" style={{ marginTop: 12 }}>
             <span className="dica">Outras opções</span>
             <button type="button" className="btn btn-pequeno" onClick={() => {
-              const r = imprimir(modeloComposto, slides, nomeArquivo(deck, modelo, "pdf"));
+              const r = imprimir(modeloComposto, slides, nomeArquivo(deck, modelo, "pdf"), deck);
               flash(r ? "Use Imprimir e escolha Salvar como PDF." : "O navegador bloqueou a impressão. Baixe o HTML.");
             }}>
               <Printer size={15} /> Imprimir
             </button>
-            <button type="button" className="btn btn-pequeno" onClick={() => { baixarHtml(modeloComposto, slides, nomeArquivo(deck, modelo, "html")); flash("HTML baixado."); }}>
+            <button type="button" className="btn btn-pequeno" onClick={() => { baixarHtml(modeloComposto, slides, nomeArquivo(deck, modelo, "html"), deck); flash("HTML baixado."); }}>
               <Globe size={15} /> Baixar HTML
             </button>
             <button type="button" className="btn btn-pequeno" onClick={async () => flash(await copiarTexto(briefing(modelo, deck)) ? "Briefing copiado." : "Não consegui copiar.")}>
               <Copy size={15} /> Copiar briefing
             </button>
           </div>
-        </section>
+        </div>
       )}
 
-      {etapa === 5 && !modelo && (
-        <section className="secao">
+      {etapa === 4 && !modelo && (
+        <div className="conteudo-etapa">
           <div className="cartao-claro">
             <p className="dica" style={{ margin: 0 }}>Escolha um design antes de exportar.</p>
-            <button type="button" className="btn btn-principal" style={{ marginTop: 12 }} onClick={() => irPara(3)}>
+            <button type="button" className="btn btn-principal" style={{ marginTop: 12 }} onClick={() => irPara(2)}>
               <Palette size={17} /> Escolher design
             </button>
           </div>
-        </section>
+        </div>
       )}
 
       <div className="barra">
@@ -472,45 +481,39 @@ export default function App() {
         )}
         <span className={`barra-info${recado ? " recado" : ""}`}>
           {recado || (etapa === 1 ? "Comece pelo conteúdo"
-            : etapa === 2 ? `${slides.length} slides prontos para receber um design`
-              : etapa === 3 ? "Toque em um modelo para ver a sua apresentação nele"
-                : etapa === 4 ? "Ajuste o que precisar; trocar de modelo não muda o conteúdo"
-                  : "Tudo pronto")}
+            : etapa === 2 ? "Toque em um modelo para ver a sua apresentação nele"
+              : etapa === 3 ? `${slides.length} slides · trocar de modelo não muda o conteúdo`
+                : "Tudo pronto")}
         </span>
         {etapa === 1 && proprio && (
           <button type="button" className="btn btn-pequeno btn-principal" onClick={() => irPara(2)}>
-            Estrutura <ArrowRight size={15} />
-          </button>
-        )}
-        {etapa === 2 && (
-          <button type="button" className="btn btn-pequeno btn-principal" onClick={() => irPara(3)}>
             Escolher design <ArrowRight size={15} />
           </button>
         )}
-        {etapa === 3 && modeloId && (
-          <button type="button" className="btn btn-pequeno btn-principal" onClick={() => irPara(4)}>
-            Revisar <ArrowRight size={15} />
+        {etapa === 2 && modeloId && (
+          <button type="button" className="btn btn-pequeno btn-principal" onClick={() => irPara(3)}>
+            Editar <ArrowRight size={15} />
           </button>
         )}
-        {etapa === 4 && (
-          <button type="button" className="btn btn-pequeno btn-principal" onClick={() => irPara(5)} disabled={!modelo}>
+        {etapa === 3 && (
+          <button type="button" className="btn btn-pequeno btn-principal" onClick={() => irPara(4)} disabled={!modelo}>
             Exportar <ArrowRight size={15} />
           </button>
         )}
-        {etapa === 5 && modelo && (
+        {etapa === 4 && modelo && (
           <button type="button" className="btn btn-pequeno" onClick={() => setApresentando(true)}>
             <Play size={15} /> Apresentar
           </button>
         )}
         {desfazer && (
           <button type="button" className="btn btn-pequeno btn-escuro" onClick={restaurar}>
-            <Undo2 size={15} /> Desfazer
+            <Undo2 size={15} /> Desfazer exclusão
           </button>
         )}
       </div>
 
       {apresentando && modelo && (
-        <Apresentar modelo={modeloComposto} slides={slides} aoSair={() => setApresentando(false)} />
+        <Apresentar modelo={modeloComposto} slides={slides} deck={deck} aoSair={() => setApresentando(false)} />
       )}
     </div>
   );

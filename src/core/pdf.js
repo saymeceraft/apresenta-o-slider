@@ -1,4 +1,5 @@
 import { slideHtml, documentoImpressao } from "./renderHtml.js";
+import { comporModelo } from "./composicao.js";
 import { W, H } from "./layout.js";
 import { baixar } from "./arquivo.js";
 
@@ -26,7 +27,7 @@ function palco() {
  * Cada slide é renderizado no próprio navegador, então cores, posições
  * e fontes ficam iguais à pré-visualização.
  */
-export async function exportarPdf(modelo, slides, nome, aoProgredir) {
+export async function exportarPdf(modelo, slides, nome, aoProgredir, deck) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import("html2canvas"),
     import("jspdf"),
@@ -38,7 +39,7 @@ export async function exportarPdf(modelo, slides, nome, aoProgredir) {
     await fontesProntas();
     for (let i = 0; i < slides.length; i++) {
       aoProgredir?.(i + 1, slides.length);
-      area.innerHTML = slideHtml(modelo, slides[i]);
+      area.innerHTML = slideHtml(deck ? comporModelo(modelo, deck, slides[i]) : modelo, slides[i]);
       // Deixa o navegador aplicar o layout antes da captura.
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
       const canvas = await html2canvas(area, {
@@ -56,8 +57,8 @@ export async function exportarPdf(modelo, slides, nome, aoProgredir) {
 }
 
 /** Alternativa: abre a janela de impressão do navegador (mantém texto vetorial). */
-export function imprimir(modelo, slides, titulo) {
-  const html = documentoImpressao(modelo, slides, titulo);
+export function imprimir(modelo, slides, titulo, deck) {
+  const html = documentoImpressao(modelo, slides, titulo, deck);
   try {
     const w = window.open("", "_blank");
     if (w && w.document) {
@@ -84,6 +85,6 @@ export function imprimir(modelo, slides, titulo) {
 }
 
 /** Última alternativa: baixa o HTML pronto para o usuário imprimir. */
-export function baixarHtml(modelo, slides, nome) {
-  baixar(nome, documentoImpressao(modelo, slides, nome), "text/html");
+export function baixarHtml(modelo, slides, nome, deck) {
+  baixar(nome, documentoImpressao(modelo, slides, nome, deck), "text/html");
 }

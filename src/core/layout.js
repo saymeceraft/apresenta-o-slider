@@ -215,8 +215,9 @@ function layoutCapa(t, s) {
   let size = Math.round(base * (t.escala || 1) * (t.upper ? 0.92 : 1) * (estreita ? 0.82 : 1) * eT.escala);
   const tp = () => comEstilo(tituloProps(t, size), eT);
   const pT = pesoDe(t.wTitle, eT);
-  const assinado = temAssinatura(t) && t.deco !== "mosaico";
-  const midiaCapa = (assinado || !!t.comp?.mediaCapa) && t.deco !== "mosaico" && (t.capa === "esquerda" || !t.capa);
+  const temFoto = !!s.imagem;
+  const assinado = !temFoto && temAssinatura(t) && t.deco !== "mosaico";
+  const midiaCapa = (temFoto || assinado || !!t.comp?.mediaCapa) && t.deco !== "mosaico" && (t.capa === "esquerda" || !t.capa);
   const colTitulo = midiaCapa ? 470 : wTxt;
   const hT = () => alturaTexto(titulo, colTitulo, size, tp().lh, t.fTitle, t.upper, t.track, pT);
   while (size > 26 && hT() > (midiaCapa ? 300 : 250)) size -= 4;
@@ -307,7 +308,11 @@ function layoutCapa(t, s) {
       return out;
     }
     default: {
-      if (assinado) {
+      if (temFoto) {
+        // A foto do slide manda: ela ocupa a coluna da direita.
+        const r = t.comp?.mediaRaio ?? t.radius;
+        out.push(S({ k: "img", src: s.imagem, x: 536, y: 64, w: 368, h: 412, ajuste: "cover", radius: r }));
+      } else if (assinado) {
         out.push(...assinaturaCapa(t));
       } else if (midiaCapa) {
         // Marcas orientadas a imagem sem assinatura própria: bloco de mídia.
@@ -337,18 +342,20 @@ function layoutTopicos(t, s) {
   const linhas = Math.ceil(n / cols);
   const eT = estiloCampo(s, "titulo");
   const eI = estiloCampo(s, "itens");
+  const larg = s.imagem ? 480 : W - 2 * P;
   const titulo = s.titulo || "";
   const sz = Math.round(44 * (t.escala || 1) * eT.escala);
   const tp = comEstilo(tituloProps(t, sz), eT);
-  const hT = titulo ? alturaTexto(titulo, W - 2 * P, sz, tp.lh, t.fTitle, t.upper, t.track, pesoDe(t.wTitle, eT)) : 0;
-  if (titulo) out.push(txt({ x: P, y: PT + 28, w: W - 2 * P, text: titulo, ...tp }));
+  const hT = titulo ? alturaTexto(titulo, larg, sz, tp.lh, t.fTitle, t.upper, t.track, pesoDe(t.wTitle, eT)) : 0;
+  if (titulo) out.push(txt({ x: P, y: PT + 28, w: larg, text: titulo, ...tp }));
 
   const topo = PT + 28 + hT + 34;
   const dispo = H - PT - topo;
   const gap = 18;
   const fsz = Math.round((n > 4 ? 19 : 22) * eI.escala);
   const cardH = Math.max(74, Math.min(126 + Math.round((fsz - 22) * 2.4), Math.floor((dispo - gap * (linhas - 1)) / linhas)));
-  const cardW = cols === 1 ? W - 2 * P : Math.floor((W - 2 * P - 20) / 2);
+  const util = s.imagem ? 480 : W - 2 * P;
+  const cardW = cols === 1 ? util : Math.floor((util - 20) / 2);
   const y0 = H - PT - (cardH * linhas + gap * (linhas - 1));
   const nb = (t.blocos || []).length;
 
@@ -385,7 +392,7 @@ function layoutTexto(t, s) {
   if (titulo) out.push(txt({ x: P, y: y0, w: W - 2 * P, text: titulo, ...tp }));
   const corpo = s.corpo || "";
   if (corpo) {
-    const cw = Math.min(W - 2 * P, 760);
+    const cw = Math.min(s.imagem ? 480 : W - 2 * P, 760);
     let cs = Math.round((corpo.length > 620 ? 19 : corpo.length > 380 ? 22 : 26) * eC.escala);
     const pC = pesoDe(t.wBody, eC);
     while (cs > 15 && alturaTexto(corpo, cw, cs, 1.5, t.fBody, false, 0, pC) > H - (y0 + hT + 30) - PT) cs -= 1;
@@ -443,7 +450,17 @@ function layoutFim(t, s) {
   return out;
 }
 
+/** Faixa de imagem à direita, para os slides que não são capa. */
+function fotoLateral(t, s) {
+  if (!s.imagem || s.tipo === "capa") return [];
+  const r = Math.min(t.radius, 20);
+  return [S({ k: "img", src: s.imagem, x: 600, y: 72, w: 288, h: 396, ajuste: "cover", radius: r })];
+}
+
+/** Largura útil do texto: encolhe quando há foto ao lado. */
+export const comFoto = (s) => !!s.imagem && s.tipo !== "capa";
+
 export function layout(t, s) {
   const fn = { capa: layoutCapa, topicos: layoutTopicos, texto: layoutTexto, destaque: layoutDestaque, citacao: layoutCitacao, fim: layoutFim }[s.tipo] || layoutTexto;
-  return [...fundoShapes(t), ...decoShapes(t, s.tipo), ...fn(t, s), ...marcaShapes(t, s)];
+  return [...fundoShapes(t), ...decoShapes(t, s.tipo), ...fn(t, s), ...fotoLateral(t, s), ...marcaShapes(t, s)];
 }

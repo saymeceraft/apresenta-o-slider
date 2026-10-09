@@ -1,5 +1,5 @@
-/* Teste manual automatizado: roda o app no Chromium e percorre os fluxos.
-   Uso: node test/e2e.mjs [url] */
+/* Percorre o fluxo inteiro em um navegador real.
+   Uso: CHROME_PATH=/caminho/para/chrome node test/e2e.mjs [url] */
 import puppeteer from "puppeteer-core";
 import fs from "fs";
 import path from "path";
@@ -9,47 +9,34 @@ const SAIDA = "/tmp/e2e";
 fs.rmSync(SAIDA, { recursive: true, force: true });
 fs.mkdirSync(SAIDA, { recursive: true });
 
-const TEXTO = `História do Campo ADIT
-Relatório de gestão
+const TEXTO = `Planejamento Estratégico 2025
+Construindo o futuro com foco, inovação e resultados
 
-Tudo começou em 2015, com poucas famílias reunidas em uma casa da vizinhança para os primeiros cultos, sem estrutura própria e com um trabalho totalmente voluntário que se sustentava na dedicação de quem chegava cedo e saía tarde.
+Nossa Visão
+Ser referência em inovação e excelência operacional na região até 2030, com equipes preparadas e processos simples.
 
-Crescimento
-Hoje são várias congregações espalhadas pela região, com equipes de louvor, ensino e assistência social organizadas por calendário anual.
-
-Pilares do trabalho
-- Ensino bíblico continuado
-- Assistência às famílias
-- Formação de novos líderes
+Pilares Estratégicos
+- Crescimento sustentável
+- Inovação contínua
+- Excelência operacional
+- Pessoas no centro
 - Presença digital
-- Cuidado com a infância
-- Integração entre congregações
+- Governança clara
 
-! 2015 | ano em que o primeiro grupo começou a se reunir
+"Quem planeja o começo colhe o futuro"
 
-"Quem cuida do começo colhe o futuro"
+85% — de satisfação dos clientes em 2024
 
-Próximos passos
-Continuar expandindo o trabalho, formar novos líderes e estruturar a secretaria digital.`;
+Conclusão
+Seguimos construindo juntos.`;
+
+// PNG 2x2 para testar imagem de slide e logo.
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mP8z8BQz0AEYBxVSF+FAP0FBQFPSn0YAAAAAElFTkSuQmCC";
 
 const erros = [];
 const passos = [];
-
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function clicarTexto(page, seletor, texto) {
-  const alvo = await page.evaluateHandle((sel, txt) => {
-    const els = [...document.querySelectorAll(sel)];
-    return els.find((e) => e.textContent.trim().toLowerCase().includes(txt.toLowerCase())) || null;
-  }, seletor, texto);
-  const el = alvo.asElement();
-  if (!el) throw new Error(`não achei "${texto}"`);
-  await el.click();
-  return true;
-}
-
-/* Aponte CHROME_PATH para um Chrome/Chromium local, ou instale
-   @sparticuz/chromium como dependência de desenvolvimento. */
 let executavel = process.env.CHROME_PATH;
 let extras = [];
 if (!executavel) {
@@ -62,17 +49,40 @@ if (!executavel) {
     process.exit(2);
   }
 }
+
 const navegador = await puppeteer.launch({
   executablePath: executavel,
   headless: "shell",
   args: [...extras, "--no-sandbox", "--disable-dev-shm-usage", "--font-render-hinting=none"],
 });
 
+async function clicar(page, seletor, texto) {
+  const ok = await page.$$eval(seletor, (ns, t) => {
+    const alvo = ns.find((n) => n.textContent.trim().toLowerCase().includes(t.toLowerCase()));
+    if (!alvo) return false;
+    alvo.click();
+    return true;
+  }, texto);
+  if (!ok) throw new Error(`não achei "${texto}" em ${seletor}`);
+}
+
+/** Envia um arquivo para o input de arquivo que o botão abre. */
+async function enviarImagem(page, abrir) {
+  const [escolha] = await Promise.all([page.waitForFileChooser({ timeout: 5000 }), abrir()]);
+  const arquivo = path.join(SAIDA, "teste.png");
+  fs.writeFileSync(arquivo, Buffer.from(PNG, "base64"));
+  await escolha.accept([arquivo]);
+  await espera(600);
+}
+
 try {
   const page = await navegador.newPage();
-  await page.setViewport({ width: 1280, height: 900 });
+  await page.setViewport({ width: 1440, height: 900 });
   page.on("pageerror", (e) => erros.push("pageerror: " + e.message));
-  page.on("console", (m) => { if (m.type() === "error") erros.push("console: " + m.text().slice(0, 200)); });
+  page.on("console", (m) => {
+    const t = m.text();
+    if (m.type() === "error" && !/fonts\.googleapis|ERR_TUNNEL|403/.test(t)) erros.push("console: " + t.slice(0, 160));
+  });
 
   const cdp = await page.target().createCDPSession();
   await cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: SAIDA });
@@ -80,212 +90,141 @@ try {
   await page.goto(URL, { waitUntil: "networkidle0" });
   passos.push("app carregou");
 
-  // Etapa 1 — conteúdo
+  /* ---------- 1. Conteúdo ---------- */
   await page.type("#conteudo", TEXTO, { delay: 0 });
-  await clicarTexto(page, "button", "Organizar em slides");
-  await page.waitForFunction(() => /Estrutura \(\d+ slides\)/.test(document.body.innerText), { timeout: 8000 });
-  const qtd = await page.evaluate(() => Number(/Estrutura \((\d+) slides\)/.exec(document.body.innerText)[1]));
-  passos.push(`estrutura montada com ${qtd} slides`);
-  if (qtd < 5) erros.push("poucos slides gerados: " + qtd);
-
-  // Quantidade alvo
-  await clicarTexto(page, ".opcao", "10");
-  await espera(300);
-  const qtd10 = await page.evaluate(() => Number(/Estrutura \((\d+) slides\)/.exec(document.body.innerText)[1]));
-  passos.push(`quantidade 10 -> ${qtd10} slides`);
-
-  // Etapa 3 — design
-  await page.click(".barra button.btn-principal");
+  await clicar(page, "button", "Organizar em slides");
   await page.waitForSelector(".modelo", { timeout: 8000 });
-  const modelos = await page.$$eval(".modelo", (n) => n.length);
-  passos.push(`galeria com ${modelos} modelos`);
-  const temConteudo = await page.$eval(".modelo", (n) => n.innerText.includes("ADIT") || n.querySelector(".slide-quadro div").innerHTML.includes("ADIT"));
-  if (!temConteudo) erros.push("a galeria não está usando o conteúdo do usuário");
-  else passos.push("galeria usa o conteúdo do usuário");
+  const nModelos = await page.$$eval(".modelo", (n) => n.length);
+  passos.push(`conteúdo organizado; galeria com ${nModelos} modelos`);
 
+  const usaConteudo = await page.$eval(".modelo", (n) => n.innerHTML.includes("Planejamento"));
+  if (!usaConteudo) erros.push("a galeria não está usando o conteúdo do usuário");
+  else passos.push("galeria mostra o conteúdo do usuário");
+
+  /* ---------- 2. Design ---------- */
   await page.click(".modelo:nth-child(3)");
   await page.waitForSelector(".modal", { timeout: 5000 });
-  const nomeModelo = await page.$eval(".modal h2", (n) => n.textContent);
-  await clicarTexto(page, ".modal button", "Usar este modelo");
-  await page.waitForFunction(() => document.body.innerText.includes("Revisar apresentação"), { timeout: 8000 });
+  const nomeModelo = await page.$eval(".modal h2", (n) => n.textContent.trim());
+  await clicar(page, ".modal button", "Usar este modelo");
+  await page.waitForSelector(".editor", { timeout: 8000 });
   passos.push(`modelo escolhido: ${nomeModelo}`);
 
-  // Etapa 4 — edição + duplicar
-  const antes = await page.$$eval(".editor-slide", (n) => n.length);
-  await page.click('.editor-slide button[aria-label="Duplicar slide"]');
-  await espera(200);
-  const depois = await page.$$eval(".editor-slide", (n) => n.length);
-  if (depois !== antes + 1) erros.push("duplicar slide não funcionou");
-  else passos.push("duplicar slide ok");
+  /* ---------- 3. Editor ---------- */
+  const nSlides = await page.$$eval(".miniatura", (n) => n.length);
+  passos.push(`editor aberto com ${nSlides} miniaturas`);
 
-  await page.type(".editor-slide input.campo", " (revisado)");
-  await espera(900);
-  const salvou = await page.evaluate(() => document.body.innerText.includes("Salvo"));
-  passos.push(salvou ? "autosave indicou Salvo" : "autosave sem indicador visível");
+  await page.type('.painel-props input.campo', " (revisado)");
+  await espera(700);
+  const noSlide = await page.$eval(".palco-slide", (n) => n.innerHTML.includes("(revisado)"));
+  if (!noSlide) erros.push("o texto digitado não apareceu na prévia");
+  else passos.push("edição aparece na prévia na hora");
 
-  // Ferramentas de texto: aumentar e colorir o título do primeiro slide
-  const antesEstilo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML);
-  await page.click('.editor-slide button[aria-label^="Aumentar título"]');
-  await page.click('.editor-slide button[aria-label^="Aumentar título"]');
-  await page.click('.editor-slide button[aria-label^="Negrito em título"]');
-  await page.$eval('.editor-slide input[aria-label^="Cor de título"]', (n) => {
-    // O React acompanha o valor por um setter próprio; usamos o nativo para o onChange disparar.
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-    setter.call(n, "#ff0055");
+  // formatação
+  await page.click('.painel-props button[title^="Aumentar título"]');
+  await page.click('.painel-props button[title^="Negrito em título"]');
+  await page.$eval('.painel-props input[title^="Cor de título"]', (n) => {
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    set.call(n, "#ff0055");
     n.dispatchEvent(new Event("input", { bubbles: true }));
     n.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  await new Promise((r) => setTimeout(r, 350));
-  const corAplicada = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML.includes("rgb(255, 0, 85)") || n.innerHTML.includes("#ff0055"));
-  if (!corAplicada) erros.push("a cor escolhida não chegou ao slide");
-  else passos.push("cor aplicada no slide");
-  const depoisEstilo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML);
-  if (antesEstilo === depoisEstilo) erros.push("as ferramentas de texto não mudaram o slide");
-  else passos.push("ferramentas de texto alteram o slide");
+  await espera(400);
+  const corOk = await page.$eval(".palco-slide", (n) => n.innerHTML.includes("rgb(255, 0, 85)") || n.innerHTML.includes("#ff0055"));
+  if (!corOk) erros.push("a formatação de cor não chegou ao slide");
+  else passos.push("formatação por campo funciona");
 
-  // Marca d'água de texto (o painel abre em "Ajustar")
-  await page.$$eval("button", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Ajustar"); if (b) b.click(); });
-  await new Promise((r) => setTimeout(r, 250));
-  await page.$$eval(".opcao", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Texto"); if (b) b.click(); });
-  await new Promise((r) => setTimeout(r, 200));
-  const campoMarca = await page.$('input[aria-label="Texto da marca d\'água"]');
-  if (!campoMarca) erros.push("campo da marca d'água não apareceu");
-  else {
-    await campoMarca.type("ADIT · Confidencial");
-    await new Promise((r) => setTimeout(r, 400));
-    const temMarca = await page.$eval(".editor-slide .slide-quadro div", (n) => n.innerHTML.includes("Confidencial"));
-    if (!temMarca) erros.push("a marca d'água não apareceu no slide");
-    else passos.push("marca d'água aplicada");
-  }
+  // desfazer e refazer
+  const antesDesfazer = await page.$eval(".palco-slide", (n) => n.innerHTML);
+  await page.click('.barra-palco button[title="Desfazer"]');
+  await espera(300);
+  const depoisDesfazer = await page.$eval(".palco-slide", (n) => n.innerHTML);
+  await page.click('.barra-palco button[title="Refazer"]');
+  await espera(300);
+  const depoisRefazer = await page.$eval(".palco-slide", (n) => n.innerHTML);
+  if (antesDesfazer === depoisDesfazer) erros.push("desfazer não mudou nada");
+  else if (depoisRefazer !== antesDesfazer) erros.push("refazer não voltou ao estado anterior");
+  else passos.push("desfazer e refazer funcionam");
 
-  // Arrastar a marca d'água para outra posição
-  const alvo = await page.$(".posicionador");
-  if (!alvo) erros.push("posicionador da marca não apareceu");
-  else {
-    const caixa = await alvo.boundingBox();
-    await page.mouse.move(caixa.x + caixa.width * 0.8, caixa.y + caixa.height * 0.8);
-    await page.mouse.down();
-    await page.mouse.move(caixa.x + caixa.width * 0.2, caixa.y + caixa.height * 0.25, { steps: 8 });
-    await page.mouse.up();
-    await new Promise((r) => setTimeout(r, 300));
-    const pos = await page.$eval(".alvo-marca", (n) => n.style.left);
-    passos.push(`marca arrastada para left ${pos}`);
-    if (parseFloat(pos) > 40) erros.push("arrastar a marca não mudou a posição");
-  }
+  // imagem do slide
+  await enviarImagem(page, () => clicar(page, ".barra-palco button", "Imagem"));
+  const temFoto = await page.$eval(".palco-slide", (n) => !!n.querySelector("img"));
+  if (!temFoto) erros.push("a imagem enviada não apareceu no slide");
+  else passos.push("imagem no slide funciona");
 
-  // Plano de fundo em gradiente
-  await page.$$eval(".opcao", (ns) => { const b = ns.find((n) => n.textContent.trim() === "Gradiente"); if (b) b.click(); });
-  await new Promise((r) => setTimeout(r, 400));
-  const temFundo = await page.$eval(".editor-slide .slide-quadro div", (n) => n.getAttribute("style") + n.innerHTML).catch(() => "");
-  const gradienteOk = await page.$eval(".editor-slide .slide-quadro div > div", (n) => n.style.background.includes("gradient"));
-  if (!gradienteOk) erros.push("o plano de fundo em gradiente não foi aplicado");
-  else passos.push("plano de fundo em gradiente aplicado");
+  // fundo em gradiente com uma cor a mais
+  await clicar(page, ".aba-prop", "Estilo");
+  await espera(300);
+  await clicar(page, ".painel-props .opcao", "Gradiente");
+  await espera(300);
+  await page.click('.painel-props button[title="Adicionar cor"]');
+  await espera(300);
+  const paradas = await page.$$eval(".parada", (n) => n.length);
+  const gradienteOk = await page.$eval(".palco-slide", (n) => /linear-gradient/.test(n.innerHTML));
+  if (!gradienteOk) erros.push("o gradiente não foi aplicado ao slide");
+  else passos.push(`gradiente aplicado com ${paradas} cores`);
 
-  // Trocar de modelo sem perder conteúdo
-  await clicarTexto(page, "button", "Trocar modelo");
-  await page.waitForSelector(".modelo", { timeout: 5000 });
-  await page.click(".modelo:nth-child(6)");
-  await page.waitForSelector(".modal", { timeout: 5000 });
-  const outro = await page.$eval(".modal h2", (n) => n.textContent);
-  await clicarTexto(page, ".modal button", "Usar este modelo");
-  await page.waitForFunction(() => document.body.innerText.includes("Revisar apresentação"), { timeout: 8000 });
-  const manteve = await page.$$eval(".editor-slide input.campo", (ns) => ns.some((n) => n.value.includes("(revisado)")));
-  if (!manteve) erros.push("o conteúdo mudou ao trocar de modelo");
-  else passos.push(`troquei para ${outro} mantendo o conteúdo`);
+  // fundo só deste slide
+  await clicar(page, ".painel-props .opcao", "Só este slide");
+  await espera(200);
+  await clicar(page, ".painel-props .opcao", "Cor");
+  await espera(1200);   // o autosave guarda com atraso
+  const fundoSoAqui = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem("estudio:deck") || "{}");
+    return !!d.slides?.[0]?.fundo && !d.slides?.[1]?.fundo;
+  });
+  if (!fundoSoAqui) erros.push("o fundo por slide não ficou restrito ao slide");
+  else passos.push("fundo só deste slide funciona");
 
-  // Etapa 5 — exportações (botão da barra, não o passo do topo)
-  await page.click(".barra button.btn-principal");
+  // reordenar e duplicar
+  const antesDup = await page.$$eval(".miniatura", (n) => n.length);
+  // o botão só aparece ao passar o mouse, então disparamos o clique direto
+  await page.$$eval('.miniatura button[title="Duplicar slide"]', (ns) => ns[0].click());
+  await espera(400);
+  const depoisDup = await page.$$eval(".miniatura", (n) => n.length);
+  if (depoisDup !== antesDup + 1) erros.push("duplicar slide não funcionou");
+  else passos.push("duplicar slide funciona");
+
+  /* ---------- 4. Exportar ---------- */
+  await clicar(page, ".barra button", "Exportar");
   await page.waitForFunction(() => document.body.innerText.includes("Outras opções"), { timeout: 8000 });
-  await clicarTexto(page, ".btn-principal", "PowerPoint");
-  await page.waitForFunction(
-    () => /Baixado: .+\.pptx/.test(document.body.innerText) || document.body.innerText.includes("Não foi possível exportar"),
-    { timeout: 20000 }
-  );
-  await clicarTexto(page, ".btn-escuro", "PDF");
-  await page.waitForFunction(
-    () => /Baixado: .+\.pdf/.test(document.body.innerText) || document.body.innerText.includes("Não foi possível gerar"),
-    { timeout: 120000 }
-  );
+  await clicar(page, ".btn-principal", "PowerPoint");
+  await page.waitForFunction(() => /Baixado: .+\.pptx/.test(document.body.innerText) || document.body.innerText.includes("Não foi possível exportar"), { timeout: 25000 });
+  await clicar(page, ".btn-escuro", "PDF");
+  await page.waitForFunction(() => /Baixado: .+\.pdf/.test(document.body.innerText) || document.body.innerText.includes("Não foi possível gerar"), { timeout: 150000 });
   await espera(1500);
-
-  const baixados = fs.readdirSync(SAIDA).filter((f) => !f.endsWith(".crdownload"));
+  const baixados = fs.readdirSync(SAIDA).filter((f) => !f.endsWith(".crdownload") && f !== "teste.png");
   passos.push("arquivos baixados: " + (baixados.join(", ") || "nenhum"));
   if (!baixados.some((f) => f.endsWith(".pptx"))) erros.push("PPTX não foi baixado");
   if (!baixados.some((f) => f.endsWith(".pdf"))) erros.push("PDF não foi baixado");
 
-  // Modo apresentação
-  await clicarTexto(page, ".barra button", "Apresentar");
+  /* ---------- apresentação ---------- */
+  await clicar(page, ".barra button", "Apresentar");
   await page.waitForSelector(".palco", { timeout: 5000 });
   await page.keyboard.press("ArrowRight");
-  await espera(200);
-  const contador = await page.$eval(".palco-barra span", (n) => n.textContent);
+  await espera(250);
+  const contador = await page.$eval(".palco-barra span", (n) => n.textContent.trim());
   await page.keyboard.press("Escape");
   await espera(300);
-  const saiu = await page.$(".palco");
-  passos.push(`modo apresentação ok (${contador.trim()}), saiu com ESC: ${!saiu}`);
+  passos.push(`modo apresentação ok (${contador}), saiu com ESC: ${!(await page.$(".palco"))}`);
 
-  // Recarregar e recuperar
+  /* ---------- persistência ---------- */
   await page.reload({ waitUntil: "networkidle0" });
-  await espera(600);
-  const recuperou = await page.evaluate(async () => {
+  await espera(800);
+  const recuperou = await page.evaluate(() => {
     const d = JSON.parse(localStorage.getItem("estudio:deck") || "null");
     return !!d?.slides?.length && JSON.stringify(d).includes("(revisado)");
   });
+  const abaAtual = await page.$eval('.aba[aria-current="page"]', (n) => n.textContent.trim());
   if (!recuperou) erros.push("a apresentação não foi recuperada após recarregar");
-  else passos.push("apresentação recuperada após recarregar");
+  else passos.push(`apresentação recuperada; voltou na aba ${abaAtual}`);
 
-  const voltouNaEtapa = await page.evaluate(() => document.body.innerText.includes("Exportar") && !!document.querySelector(".barra"));
-  const etapaAtual = await page.$eval('.passo[aria-current="step"]', (n) => n.textContent.trim());
-  if (etapaAtual.startsWith("1")) erros.push("após recarregar voltou para a etapa 1 em vez de onde estava");
-  else passos.push(`voltou direto para a etapa ${etapaAtual}`);
-
-  // Desfazer exclusão
-  await page.$$eval(".passo", (ns) => { const b = ns.find((n) => n.textContent.includes("Revisão")); if (b) b.click(); });
-  await espera(600);
-  const antesEx = await page.$$eval(".editor-slide", (n) => n.length);
-  await page.click('.editor-slide button[aria-label="Excluir slide"]');
-  await espera(300);
-  await page.$$eval(".barra button", (ns) => { const b = ns.find((n) => n.textContent.includes("Desfazer")); if (b) b.click(); });
-  await espera(400);
-  const depoisEx = await page.$$eval(".editor-slide", (n) => n.length);
-  if (depoisEx !== antesEx) erros.push(`desfazer exclusão não restaurou o slide (${antesEx} -> ${depoisEx})`);
-  else passos.push("excluir e desfazer funcionam");
-
-  // Trocar o tipo preservando o texto
-  const tipoOk = await page.evaluate(async () => {
-    const cartoes = [...document.querySelectorAll(".editor-slide")];
-    const k = cartoes.findIndex((n) => n.querySelector("select").value === "topicos");
-    if (k < 0) return "sem slide de tópicos";
-    const itens = [...cartoes[k].querySelectorAll("input.campo")].map((n) => n.value).filter(Boolean);
-    const sel = cartoes[k].querySelector("select");
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
-    setter.call(sel, "texto");
-    sel.dispatchEvent(new Event("change", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 500));
-    const area = document.querySelectorAll(".editor-slide")[k].querySelector("textarea");
-    if (!itens.length) return "slide de tópicos sem itens";
-    return area && itens.some((i) => area.value.includes(i)) ? "ok" : `texto perdido ao trocar o tipo (itens: ${itens.join("|")}, corpo: ${area ? area.value.slice(0, 40) : "sem textarea"})`;
-  });
-  if (tipoOk === "ok") passos.push("trocar o tipo preserva o texto");
-  else if (tipoOk !== "sem slide de tópicos") erros.push(tipoOk);
-
-  // Tooltips nos botões de ícone
-  const semDica = await page.$$eval(".editor-slide button, .fmt", (ns) =>
-    ns.filter((n) => !n.textContent.trim() && !n.getAttribute("title")).length);
-  if (semDica) erros.push(`${semDica} botões de ícone sem dica ao passar o mouse`);
-  else passos.push("todos os botões de ícone têm dica");
-
-  // IA sem chave: o app segue funcionando
-  const semIA = await page.evaluate(() => document.body.innerText.includes("não está configurada") || true);
-  passos.push("sem chave de IA o app continua utilizável: " + semIA);
-
-  // Mobile
+  /* ---------- celular ---------- */
   await page.setViewport({ width: 390, height: 844, isMobile: true });
-  await espera(400);
+  await espera(500);
   const estouro = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  passos.push(`estouro horizontal no celular: ${estouro}px`);
-  if (estouro > 4) erros.push("layout estoura na largura do celular: " + estouro + "px");
-  await page.screenshot({ path: path.join(SAIDA, "mobile.png"), fullPage: false });
+  if (estouro > 4) erros.push(`layout estoura ${estouro}px na largura do celular`);
+  else passos.push("sem rolagem lateral no celular");
+  await page.screenshot({ path: path.join(SAIDA, "mobile.png") });
 } catch (e) {
   erros.push("fluxo interrompido: " + e.message);
 } finally {

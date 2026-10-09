@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import SlideView from "./SlideView.jsx";
 
 /** Tela cheia para apresentar. Não altera o deck: só navega. */
-export default function Apresentar({ modelo, slides, inicial = 0, aoSair }) {
+export default function Apresentar({ modelo, slides, deck, inicial = 0, aoSair }) {
   const [i, setI] = useState(Math.min(inicial, slides.length - 1));
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function Apresentar({ modelo, slides, inicial = 0, aoSair }) {
   return (
     <div className="palco" role="dialog" aria-modal="true" aria-label="Modo apresentação">
       <div className="palco-slide">
-        <SlideView modelo={modelo} slide={slides[i]} />
+        <SlideView modelo={modelo} slide={slides[i]} deck={deck} />
       </div>
       <div className="palco-barra">
         <button type="button" onClick={() => setI((v) => Math.max(v - 1, 0))} aria-label="Slide anterior"><ChevronLeft size={18} /></button>
