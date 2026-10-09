@@ -2,6 +2,7 @@ import { F, CW, isSerif } from "./fontes.js";
 import { sobre, misturar } from "./cores.js";
 import { ROTULO } from "./deck.js";
 import { fundoShapes, marcaShapes } from "./composicao.js";
+import { assinaturaCapa, temAssinatura } from "./assinaturas.js";
 
 /* Sistema de coordenadas lógico do slide: 960 x 540 (16:9).
    Toda exportação converte a partir daqui, então mudar de resolução
@@ -214,7 +215,8 @@ function layoutCapa(t, s) {
   let size = Math.round(base * (t.escala || 1) * (t.upper ? 0.92 : 1) * (estreita ? 0.82 : 1) * eT.escala);
   const tp = () => comEstilo(tituloProps(t, size), eT);
   const pT = pesoDe(t.wTitle, eT);
-  const midiaCapa = !!t.comp?.mediaCapa && t.deco !== "mosaico" && (t.capa === "esquerda" || !t.capa);
+  const assinado = temAssinatura(t) && t.deco !== "mosaico";
+  const midiaCapa = (assinado || !!t.comp?.mediaCapa) && t.deco !== "mosaico" && (t.capa === "esquerda" || !t.capa);
   const colTitulo = midiaCapa ? 470 : wTxt;
   const hT = () => alturaTexto(titulo, colTitulo, size, tp().lh, t.fTitle, t.upper, t.track, pT);
   while (size > 26 && hT() > (midiaCapa ? 300 : 250)) size -= 4;
@@ -305,8 +307,10 @@ function layoutCapa(t, s) {
       return out;
     }
     default: {
-      if (midiaCapa) {
-        // Marcas orientadas a imagem: a capa traz o bloco de mídia ao lado.
+      if (assinado) {
+        out.push(...assinaturaCapa(t));
+      } else if (midiaCapa) {
+        // Marcas orientadas a imagem sem assinatura própria: bloco de mídia.
         const r = t.comp.mediaRaio ?? t.radius;
         const sombra = SOMBRAS[t.comp?.sombra || 0];
         out.push(S({ k: "rect", x: 560, y: 64, w: 336, h: 412, fill: t.surface, radius: r, sombra }));

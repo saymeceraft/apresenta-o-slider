@@ -74,7 +74,7 @@ export const MODELOS_ARQUIVO = [
     deco: "stripe", grad: ["#ff5757", "#d23434", "#a1131a"], cartao: "borda" }),
   mk({ id: "sentry", comp: { ...COMP_PADRAO, chip: "solido", sombra: 2, realce: true }, nome: "Sentry", arquivo: "DESIGN-sentry.md", desc: "Meia-noite violeta, verde-limão elétrico e personalidade.",
     bg: "#1f1633", fg: "#ffffff", muted: "#bdb8c0", accent: "#c2ef4e", surface: "#150f23", hairline: "#362d59",
-    fTitle: "Space Grotesk", fBody: "Rubik", radius: 10, capa: "cartaz", deco: "glow", glow: "#6a5fc1", glowA: 0.45 }),
+    fTitle: "Space Grotesk", fBody: "Rubik", radius: 10, deco: "glow", glow: "#6a5fc1", glowA: 0.45 }),
   mk({ id: "tesla", comp: { ...COMP_PADRAO, chip: "nenhum", sombra: 1 }, nome: "Tesla", arquivo: "DESIGN-tesla.md", desc: "Subtração radical: branco, cinza carbono e um só azul.",
     fg: "#171a20", muted: "#5c5e62", accent: "#3e6ae1", surface: "#f4f4f4", hairline: "#eeeeee", wTitle: 500, track: 0, radius: 4, capa: "centro" }),
   mk({ id: "together-ai", comp: { ...COMP_PADRAO, chip: "quadro", sombra: 2 }, nome: "Together AI", arquivo: "DESIGN-together_ai.md", desc: "Azul-noite com fita em gradiente laranja, magenta e lavanda.",
