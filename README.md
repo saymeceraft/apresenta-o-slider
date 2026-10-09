@@ -6,8 +6,12 @@ Tudo o que importa roda no navegador: nenhum servidor é necessário para criar,
 ## Como funciona
 
 ```
-CONTEÚDO → ESTRUTURA → DESIGN → REVISÃO → EXPORTAÇÃO
+CONTEÚDO → DESIGN → EDITAR → EXPORTAR
 ```
+
+A aba **Editar** é um editor de três painéis: miniaturas arrastáveis à esquerda,
+prévia grande no centro (com zoom, guias, desfazer e refazer) e as propriedades
+do slide à direita, em três fichas — Conteúdo, Layout e Estilo.
 
 O conteúdo (o *deck*) e o design (o *modelo*) são separados. Trocar de modelo nunca altera o texto,
 e o mesmo deck pode ser exportado com qualquer um dos 26 modelos incluídos.
@@ -19,7 +23,7 @@ e o mesmo deck pode ser exportado com qualquer um dos 26 modelos incluídos.
 | Conteúdo | Texto livre ou sintaxe avançada (`#`, `##`, `-`, `>`, `! número \| legenda`) |
 | Estrutura | `interpretarConteudo()` reconhece título, seções, listas, citações e números |
 | Design | Galeria mostra a sua apresentação em cada modelo |
-| Revisão | Editar, duplicar, reordenar, trocar tipo, formatar cada campo, plano de fundo, marca d'água, apresentar em tela cheia |
+| Editar | Reordenar arrastando, duplicar, trocar tipo, formatar cada campo, imagem no slide, fundo por slide ou geral, marca d'água, desfazer e refazer, apresentar |
 | Exportação | `.pptx` com formas e textos editáveis, `.pdf` 16:9 com uma página por slide |
 
 ### IA, opcional
@@ -119,9 +123,11 @@ itálico, alinhamento e cor, com um botão para voltar ao padrão do modelo. Tod
 de ícone mostra o nome da ação ao passar o mouse. Os ajustes
 ficam no slide (`slide.estilo`), não no modelo, então sobrevivem à troca de design.
 
-O plano de fundo (cor, gradiente ou imagem, com controle de escurecimento) e a marca
-d'água (texto ou logo, em cinco posições, com tamanho e opacidade) valem para a
-apresentação inteira e ficam no deck. Cada slide pode esconder a marca individualmente.
+O plano de fundo aceita cor, gradiente com até seis paradas e ângulo livre, ou uma
+imagem sua com controle de escurecimento — e pode valer para a apresentação inteira
+ou só para o slide aberto. Cada slide também aceita uma imagem própria, que ocupa a
+coluna ao lado do texto. A marca d'água (texto ou logo) é arrastada até a posição
+desejada e pode ser escondida em slides específicos.
 Tudo isso vai junto no PPTX — a imagem é embutida no arquivo — e no PDF.
 
 ## Modelos
